@@ -1,0 +1,14 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/src/generated/prisma
+
+# WhatsApp session credentials — NEVER commit these
+sessions/
+
+# Runtime log files
+logs/
+
+# Temporary uploaded files for OCR processing
+uploads/

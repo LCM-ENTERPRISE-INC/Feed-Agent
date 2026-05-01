@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SystemConfig {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Administrador do sistema. Responsável por conectar o WhatsApp via Baileys,
+/// submeter fontes de notícias, revisar minutas e dispará-las para seus contatos.
+model User {
+  id           Int       @id @default(autoincrement())
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  contacts     Contact[]
+
+  @@map("users")
+}
+
+/// Contato cadastrado pelo usuário administrador para receber o feed de notícias.
+model Contact {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  phoneNumber String   @map("phone_number")
+  name        String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, phoneNumber])
+  @@map("contacts")
+}
