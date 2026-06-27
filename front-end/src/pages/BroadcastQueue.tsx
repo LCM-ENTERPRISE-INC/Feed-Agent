@@ -30,6 +30,7 @@ import {
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { showToast } from '@/utils/toastHelper';
+import apiClient from '@/services/apiClient';
 
 interface QueueJob {
   id: string;
@@ -61,151 +62,15 @@ interface HistoricalBatch {
   status: 'COMPLETED' | 'WARNING';
 }
 
-const INITIAL_JOBS: QueueJob[] = [
-  {
-    id: 'job-501',
-    recipientName: 'Mário Lopes',
-    recipientPhone: '+55 11 98888-7777',
-    messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-    status: 'COMPLETED',
-    attempts: 1,
-    timestamp: '14:52:10',
-  },
-  {
-    id: 'job-502',
-    recipientName: 'Ana Oliveira',
-    recipientPhone: '+55 11 97777-6666',
-    messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-    status: 'COMPLETED',
-    attempts: 1,
-    timestamp: '14:52:14',
-  },
-  {
-    id: 'job-503',
-    recipientName: 'Carlos Santos',
-    recipientPhone: '+55 11 96666-5555',
-    messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-    status: 'COMPLETED',
-    attempts: 1,
-    timestamp: '14:52:18',
-  },
-  {
-    id: 'job-504',
-    recipientName: 'Beatriz Souza',
-    recipientPhone: '+55 11 95555-4444',
-    messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-    status: 'PROCESSING',
-    attempts: 1,
-    timestamp: '14:52:22',
-  },
-  {
-    id: 'job-505',
-    recipientName: 'Fernando Costa',
-    recipientPhone: '+55 11 94444-3333',
-    messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-    status: 'QUEUED',
-    attempts: 0,
-    timestamp: 'Fila BullMQ',
-  },
-  {
-    id: 'job-506',
-    recipientName: 'Mariana Lima',
-    recipientPhone: '+55 11 93333-2222',
-    messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-    status: 'QUEUED',
-    attempts: 0,
-    timestamp: 'Fila BullMQ',
-  },
-  {
-    id: 'job-507',
-    recipientName: 'Roberto Almeida',
-    recipientPhone: '+55 11 92222-1111',
-    messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-    status: 'FAILED',
-    attempts: 2,
-    timestamp: '14:50:05',
-    error: 'ERR_TIMEOUT_WHATSAPP_API',
-    errorDescription: 'O servidor Meta Graph demorou para confirmar o recibo. Possível instabilidade temporária na rota.',
-  },
-  {
-    id: 'job-508',
-    recipientName: 'Juliana Ribeiro',
-    recipientPhone: '+55 11 91111-0000',
-    messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-    status: 'FAILED',
-    attempts: 3,
-    timestamp: '14:51:12',
-    error: 'ERR_RATE_LIMIT_EXCEEDED',
-    errorDescription: 'Limite de tráfego Meta Business atingido para a janela de 1 minuto. Recomenda-se aumentar o delay antispam.',
-  },
-  {
-    id: 'job-509',
-    recipientName: 'Lucas Moura',
-    recipientPhone: '+55 11 90000-9999',
-    messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-    status: 'FAILED',
-    attempts: 1,
-    timestamp: '14:51:50',
-    error: 'ERR_INVALID_PHONE_NUMBER',
-    errorDescription: 'O número de destino não possui registro ativo de WhatsApp ou a formatação DDI/DDD é inválida.',
-  },
-];
-
-const INITIAL_LOGS: SseLogItem[] = [
-  { id: 'log-1', timestamp: '14:50:01', type: 'INFO', message: 'Conexão SSE estabelecida com cluster Redis (BullMQ v5.12).' },
-  { id: 'log-2', timestamp: '14:50:02', type: 'INFO', message: 'Carregando pauta ativa: "Alta dos combustíveis impacta mercado imobiliário".' },
-  { id: 'log-3', timestamp: '14:50:05', type: 'WARNING', message: 'Rate-limit tracking ativado. Delay configurado: 3.5s entre disparos.' },
-  { id: 'log-4', timestamp: '14:52:10', type: 'SUCCESS', message: 'Pacote entregue com sucesso para Mário Lopes (+55 11 98888-7777). ID Meta: wamid.HBgL.' },
-  { id: 'log-5', timestamp: '14:52:14', type: 'SUCCESS', message: 'Pacote entregue com sucesso para Ana Oliveira (+55 11 97777-6666). ID Meta: wamid.HBgM.' },
-  { id: 'log-6', timestamp: '14:52:18', type: 'SUCCESS', message: 'Pacote entregue com sucesso para Carlos Santos (+55 11 96666-5555). ID Meta: wamid.HBgN.' },
-  { id: 'log-7', timestamp: '14:52:22', type: 'INFO', message: 'Processando job #504 (Beatriz Souza) na fila do worker principal...' },
-];
-
-const INITIAL_HISTORICAL: HistoricalBatch[] = [
-  {
-    id: 'batch-hist-1',
-    date: '10/05/2026',
-    title: 'Aumento Diesel Impacta Tabela de Fretes',
-    totalContacts: 120,
-    successRate: '98%',
-    deliveredCount: 118,
-    duration: '7m 12s',
-    status: 'COMPLETED'
-  },
-  {
-    id: 'batch-hist-2',
-    date: '08/05/2026',
-    title: 'Taxa Selic Mantida pelo Copom - Boletim Focus',
-    totalContacts: 150,
-    successRate: '100%',
-    deliveredCount: 150,
-    duration: '9m 05s',
-    status: 'COMPLETED'
-  },
-  {
-    id: 'batch-hist-3',
-    date: '03/05/2026',
-    title: 'Alerta de Geada Extrema no Sul e Sudeste',
-    totalContacts: 210,
-    successRate: '95%',
-    deliveredCount: 200,
-    duration: '12m 40s',
-    status: 'WARNING'
-  },
-  {
-    id: 'batch-hist-4',
-    date: '28/04/2026',
-    title: 'Fechamento de Câmbio: Dólar atinge R$ 5,35',
-    totalContacts: 185,
-    successRate: '99%',
-    deliveredCount: 183,
-    duration: '10m 50s',
-    status: 'COMPLETED'
-  }
-];
+interface Contact {
+  id: number;
+  name: string;
+  phoneNumber: string;
+  active: boolean;
+}
 
 export const BroadcastQueue: React.FC = () => {
-  const [jobs, setJobs] = useState<QueueJob[]>(INITIAL_JOBS);
+  const [jobs, setJobs] = useState<QueueJob[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
@@ -214,24 +79,68 @@ export const BroadcastQueue: React.FC = () => {
   const [adminTestPhone, setAdminTestPhone] = useState<string>('+55 11 99999-8888');
   const [isTestFiring, setIsTestFiring] = useState<boolean>(false);
   const [isLaunchingBatch, setIsLaunchingBatch] = useState<boolean>(false);
-  const [activeContactsCount, setActiveContactsCount] = useState<number>(125);
   const [isQueuePaused, setIsQueuePaused] = useState<boolean>(false);
 
   // SSE Terminal Logs State
-  const [logs, setLogs] = useState<SseLogItem[]>(INITIAL_LOGS);
+  const [logs, setLogs] = useState<SseLogItem[]>([]);
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
   const terminalBottomRef = useRef<HTMLDivElement | null>(null);
 
   // Historical Batches State
-  const [historicalBatches] = useState<HistoricalBatch[]>(INITIAL_HISTORICAL);
+  const [historicalBatches, setHistoricalBatches] = useState<HistoricalBatch[]>([]);
   const [isExportingCsvId, setIsExportingCsvId] = useState<string | null>(null);
+
+  // Contacts State
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const res = await apiClient.get('/analytics/history');
+        if (res.data?.success) {
+           setHistoricalBatches(res.data.data.history || []);
+        }
+      } catch (err) {
+        showToast.error('Erro ao buscar histórico de lotes.');
+      }
+    };
+
+    const fetchContacts = async () => {
+      try {
+        const res = await apiClient.get('/contacts?limit=1000');
+        console.log('fetchContacts response:', res.data);
+        
+        let contactsArray = [];
+        if (res.data?.success) {
+          if (Array.isArray(res.data.data)) {
+            contactsArray = res.data.data;
+          } else if (res.data.data && Array.isArray(res.data.data.data)) {
+            contactsArray = res.data.data.data;
+          } else if (res.data.data && Array.isArray(res.data.data.contacts)) {
+            contactsArray = res.data.data.contacts;
+          }
+        }
+        
+        console.log('Resolved contacts array:', contactsArray);
+        setContacts(contactsArray);
+        
+      } catch (err) {
+        console.error('fetchContacts error:', err);
+        showToast.error('Erro ao buscar contatos.');
+      }
+    };
+
+    fetchHistory();
+    fetchContacts();
+  }, []);
 
   // Sprint 40: Retrying State
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [isRetryingAll, setIsRetryingAll] = useState<boolean>(false);
 
   // Dynamic calculation for estimated total transmission time
-  const totalEstimatedSeconds = activeContactsCount * delaySeconds;
+  const totalEstimatedSeconds = (selectedContactIds.length || 1) * delaySeconds;
   const estimatedMinutes = Math.floor(totalEstimatedSeconds / 60);
   const estimatedRemainderSeconds = Math.round(totalEstimatedSeconds % 60);
 
@@ -242,71 +151,7 @@ export const BroadcastQueue: React.FC = () => {
     }
   }, [logs, autoScroll]);
 
-  // Simulation interval for processing queue
-  useEffect(() => {
-    if (isQueuePaused) return;
-
-    const timer = setInterval(() => {
-      const currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      
-      setJobs(prev => {
-        const queuedJobs = prev.filter(j => j.status === 'QUEUED');
-        if (queuedJobs.length === 0) return prev;
-
-        const nextJob = queuedJobs[0];
-
-        setLogs(prevLogs => {
-          const newLog: SseLogItem = {
-            id: `log-${Date.now()}-1`,
-            timestamp: currentTime,
-            type: 'INFO',
-            message: `[BULLMQ] Consumindo job #${nextJob.id} -> Destinatário: ${nextJob.recipientName} (${nextJob.recipientPhone})`,
-          };
-          return [...prevLogs.slice(-499), newLog];
-        });
-
-        return prev.map(j => {
-          if (j.id === nextJob.id) {
-            return { ...j, status: 'PROCESSING', timestamp: currentTime };
-          }
-          if (j.status === 'PROCESSING') {
-            const isSuccess = Math.random() > 0.15;
-            
-            setLogs(prevLogs => {
-              const resLog: SseLogItem = {
-                id: `log-${Date.now()}-2`,
-                timestamp: currentTime,
-                type: isSuccess ? 'SUCCESS' : 'ERROR',
-                message: isSuccess 
-                  ? `[SUCCESS] Confirmação de entrega Meta Graph API para ${j.recipientName} (${j.recipientPhone}). WAMID: wamid.${Math.random().toString(36).substring(2, 8)}`
-                  : `[ERROR] Falha de rate-limit ou timeout no envio para ${j.recipientName}. Retentativa programada (Attempt ${j.attempts + 1}/3).`,
-              };
-              return [...prevLogs.slice(-499), resLog];
-            });
-
-            const errorCodes = ['ERR_TIMEOUT_WHATSAPP_API', 'ERR_RATE_LIMIT_EXCEEDED', 'ERR_INVALID_PHONE_NUMBER'];
-            const randomErr = errorCodes[Math.floor(Math.random() * errorCodes.length)];
-            const errorDesc = randomErr === 'ERR_TIMEOUT_WHATSAPP_API' 
-              ? 'O servidor Meta Graph demorou para confirmar o recibo. Possível instabilidade temporária na rota.'
-              : randomErr === 'ERR_RATE_LIMIT_EXCEEDED'
-              ? 'Limite de tráfego Meta Business atingido para a janela de 1 minuto. Recomenda-se aumentar o delay antispam.'
-              : 'O número de destino não possui registro ativo de WhatsApp ou a formatação DDI/DDD é inválida.';
-
-            return {
-              ...j,
-              status: isSuccess ? 'COMPLETED' : 'FAILED',
-              error: isSuccess ? undefined : randomErr,
-              errorDescription: isSuccess ? undefined : errorDesc,
-              attempts: j.attempts + 1,
-            };
-          }
-          return j;
-        });
-      });
-    }, delaySeconds * 1000);
-
-    return () => clearInterval(timer);
-  }, [isQueuePaused, delaySeconds]);
+  // Removed simulation interval for processing queue
 
   const triggerRefresh = () => {
     setLoading(true);
@@ -330,27 +175,31 @@ export const BroadcastQueue: React.FC = () => {
     }, 1500);
   };
 
-  const handleLaunchMassBatch = () => {
+  const handleLaunchMassBatch = async () => {
+    if (selectedContactIds.length === 0) {
+      showToast.error('Selecione pelo menos um contato para disparar.');
+      return;
+    }
+
     setIsLaunchingBatch(true);
     showToast.info('Inicializando esteira de transmissão em lote com delay configurado...');
 
-    setTimeout(() => {
-      setIsLaunchingBatch(false);
-      showToast.success(`🚀 Lote lançado com sucesso! Injetando ${activeContactsCount} mensagens na fila com intervalo de ${delaySeconds}s.`);
-      
-      const newBatchJobs: QueueJob[] = Array.from({ length: 12 }).map((_, i) => ({
-        id: `batch-${Date.now()}-${i}`,
-        recipientName: `Contato Segmentado #${i + 1}`,
-        recipientPhone: `+55 11 91111-${1000 + i}`,
-        messageSnippet: '📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽ Ocorreu um aumento de 5%...',
-        status: 'QUEUED',
-        attempts: 0,
-        timestamp: 'Fila BullMQ',
-      }));
+    try {
+      const res = await apiClient.post('/drafts/broadcast/launch', {
+        contactIds: selectedContactIds,
+        delaySeconds: delaySeconds
+      });
 
-      setJobs(prev => [...newBatchJobs, ...prev]);
-      setIsQueuePaused(false);
-    }, 1800);
+      if (res.data?.success) {
+        showToast.success(`🚀 Lote lançado com sucesso! Injetando ${selectedContactIds.length} mensagens na fila com intervalo de ${delaySeconds}s.`);
+        setIsQueuePaused(false);
+        triggerRefresh();
+      }
+    } catch (err) {
+      showToast.error(`Erro ao lançar lote: ${(err as Error).message}`);
+    } finally {
+      setIsLaunchingBatch(false);
+    }
   };
 
   const handleTogglePauseQueue = () => {
@@ -562,6 +411,51 @@ export const BroadcastQueue: React.FC = () => {
 
       </div>
 
+      {/* Sprint 40: Seleção de Contatos para Disparo */}
+      <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'var(--primary)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Layers size={22} style={{ color: 'var(--primary)' }} />
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Seleção de Contatos para o Lote</h3>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Selecione quem irá receber todas as minutas aprovadas.</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Button type="button" variant="secondary" onClick={() => setSelectedContactIds(contacts.map(c => c.id))} style={{ height: '36px', fontSize: '0.8rem' }}>
+              Selecionar Todos
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setSelectedContactIds([])} style={{ height: '36px', fontSize: '0.8rem' }}>
+              Limpar Seleção
+            </Button>
+          </div>
+        </div>
+
+        <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px', backgroundColor: '#090d16', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          {contacts.length === 0 ? (
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', gridColumn: '1 / -1' }}>Nenhum contato encontrado ou carregando...</div>
+          ) : (
+            contacts.map(contact => (
+              <label key={contact.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', backgroundColor: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <input 
+                  type="checkbox" 
+                  checked={selectedContactIds.includes(contact.id)}
+                  onChange={e => {
+                    if (e.target.checked) setSelectedContactIds(prev => [...prev, contact.id]);
+                    else setSelectedContactIds(prev => prev.filter(id => id !== contact.id));
+                  }}
+                  style={{ accentColor: 'var(--primary)', width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '0.9rem', color: 'white', fontWeight: 600 }}>{contact.name}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{contact.phoneNumber}</span>
+                </div>
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Grid Layout: Launch Configuration Hub */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '24px' }}>
         
@@ -614,16 +508,14 @@ export const BroadcastQueue: React.FC = () => {
 
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Contatos Ativos no Lote</label>
-                <input 
-                  type="number" 
-                  value={activeContactsCount} 
-                  onChange={e => setActiveContactsCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  style={{
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Contatos Selecionados</label>
+                <div style={{
                     height: '40px', padding: '0 12px', borderRadius: '8px', backgroundColor: '#0f172a',
-                    border: '1px solid var(--border)', color: 'white', fontSize: '0.95rem', fontWeight: 600, outline: 'none'
-                  }}
-                />
+                    border: '1px solid var(--border)', color: 'white', fontSize: '1.1rem', fontWeight: 700,
+                    display: 'flex', alignItems: 'center'
+                  }}>
+                  {selectedContactIds.length}
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center' }}>

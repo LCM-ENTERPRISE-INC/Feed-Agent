@@ -103,4 +103,32 @@ router.get('/job/:jobId/stream', newsController.streamJobStatus.bind(newsControl
  */
 router.post('/generate-draft', aiProcessingLimiter, uploadNewsSource, newsController.generateDraft.bind(newsController));
 
+/**
+ * @openapi
+ * /api/news/generate-ai-draft:
+ *   post:
+ *     summary: Generate a news draft from a URL or text using Llama 3
+ *     description: Accepts a text snippet or URL, extracts its content, and runs a custom prompt through the local Llama model.
+ *     tags: [News]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               sourceContent:
+ *                 type: string
+ *               tone:
+ *                 type: string
+ *               length:
+ *                 type: integer
+ *               instructions:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Draft generated successfully.
+ */
+router.post('/generate-ai-draft', aiProcessingLimiter, newsController.generateAiDraft.bind(newsController));
+
 export default router;

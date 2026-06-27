@@ -65,6 +65,7 @@ export class WhatsAppService extends EventEmitter {
   private socket:        WASocket | null = null;
   private qrTimeoutRef:  ReturnType<typeof setTimeout> | null = null;
   private reconnectTimeoutRef: ReturnType<typeof setTimeout> | null = null;
+  private isManualOperation: boolean = false; // Prevents auto-reconnect during manual restart/logout
   private status:        WaStatus = {
     state:       WaConnectionState.CLOSE,
     lastUpdated: new Date(),
@@ -172,6 +173,41 @@ export class WhatsAppService extends EventEmitter {
     return sentMsg?.key?.id || '';
   }
 
+  /**
+   * Manually logs out from the current Baileys session and cleans up disk files.
+   * Emits 'wa:close' to notify clients that the session was ended by the user.
+   */
+  public async logout(): Promise<void> {
+    logger.info('[whatsapp]: Manual logout requested by user.');
+    this.isManualOperation = true;
+    try {
+      if (this.socket) {
+        await this.socket.logout('Manual logout requested via API').catch(() => {});
+      }
+      this._closeSocket();
+      this._clearSession();
+      this._updateStatus(WaConnectionState.CLOSE);
+      this.emit('wa:close');
+    } finally {
+      this.isManualOperation = false;
+    }
+  }
+
+  /**
+   * Cleans up the current session and reinitializes a fresh one to generate a new QR Code.
+   */
+  public async restart(): Promise<void> {
+    logger.info('[whatsapp]: Manual restart requested by user to generate new QR Code.');
+    this.isManualOperation = true;
+    try {
+      this._closeSocket();
+      this._clearSession();
+      await this.initialize();
+    } finally {
+      this.isManualOperation = false;
+    }
+  }
+
   // ─── Private Helpers ──────────────────────────────────────────────────────
 
   /**
@@ -251,16 +287,19 @@ export class WhatsAppService extends EventEmitter {
           this.emit('wa:close', reason);
           this._clearSession();
         } else {
-          logger.warn(`[whatsapp]: Connection closed. Reason code: ${reason}. Reconnecting in 5s...`);
+          logger.warn(`[whatsapp]: Connection closed. Reason code: ${reason}. ${this.isManualOperation ? 'Manual operation in progress, skipping auto-reconnect.' : 'Reconnecting in 5s...'}`);
           this.emit('wa:close', reason);
-          
-          if (this.reconnectTimeoutRef) {
-            clearTimeout(this.reconnectTimeoutRef);
+
+          // Don't auto-reconnect if this was triggered by a manual restart/logout
+          if (!this.isManualOperation) {
+            if (this.reconnectTimeoutRef) {
+              clearTimeout(this.reconnectTimeoutRef);
+            }
+            this.reconnectTimeoutRef = setTimeout(() => {
+              this.reconnectTimeoutRef = null;
+              this.initialize().catch(() => {});
+            }, 5_000);
           }
-          this.reconnectTimeoutRef = setTimeout(() => {
-            this.reconnectTimeoutRef = null;
-            this.initialize().catch(() => {});
-          }, 5_000);
         }
       }
     });
@@ -320,8 +359,29 @@ export class WhatsAppService extends EventEmitter {
   /** Removes all session files, forcing a fresh QR scan on next initialize(). */
   private _clearSession(): void {
     if (fs.existsSync(SESSIONS_DIR)) {
-      fs.rmSync(SESSIONS_DIR, { recursive: true, force: true });
-      logger.info('[whatsapp]: Session directory cleared.');
+      try {
+        fs.rmSync(SESSIONS_DIR, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+        logger.info('[whatsapp]: Session directory cleared.');
+      } catch (err) {
+        logger.error(`[whatsapp]: Failed to clear session directory, trying to delete files individually: ${err}`);
+        try {
+          const files = fs.readdirSync(SESSIONS_DIR);
+          for (const file of files) {
+            try {
+              const filePath = path.join(SESSIONS_DIR, file);
+              if (fs.lstatSync(filePath).isDirectory()) {
+                fs.rmSync(filePath, { recursive: true, force: true });
+              } else {
+                fs.unlinkSync(filePath);
+              }
+            } catch (fileErr) {
+              logger.warn(`[whatsapp]: Could not delete file ${file}: ${fileErr}`);
+            }
+          }
+        } catch (dirErr) {
+          logger.error(`[whatsapp]: Error reading session directory: ${dirErr}`);
+        }
+      }
     }
   }
 }

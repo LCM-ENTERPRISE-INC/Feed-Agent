@@ -40,25 +40,9 @@ interface ApiLatencyPoint {
   reqPerSec: number;
 }
 
-const INITIAL_OCR_DATA: OcrLatencyPoint[] = [
-  { batch: 'Doc #101', tesseractLatencySec: 1.2, wordCount: 450 },
-  { batch: 'Doc #102', tesseractLatencySec: 0.8, wordCount: 310 },
-  { batch: 'Doc #103', tesseractLatencySec: 1.5, wordCount: 580 },
-  { batch: 'Doc #104', tesseractLatencySec: 0.6, wordCount: 220 },
-  { batch: 'Doc #105', tesseractLatencySec: 2.1, wordCount: 890 },
-  { batch: 'Doc #106', tesseractLatencySec: 1.1, wordCount: 410 },
-  { batch: 'Doc #107', tesseractLatencySec: 0.9, wordCount: 350 },
-];
+const INITIAL_OCR_DATA: OcrLatencyPoint[] = [];
 
-const INITIAL_API_DATA: ApiLatencyPoint[] = [
-  { time: '16:20', latencyMs: 45, reqPerSec: 120 },
-  { time: '16:21', latencyMs: 52, reqPerSec: 145 },
-  { time: '16:22', latencyMs: 38, reqPerSec: 90 },
-  { time: '16:23', latencyMs: 65, reqPerSec: 210 },
-  { time: '16:24', latencyMs: 42, reqPerSec: 110 },
-  { time: '16:25', latencyMs: 48, reqPerSec: 135 },
-  { time: '16:26', latencyMs: 50, reqPerSec: 150 },
-];
+const INITIAL_API_DATA: ApiLatencyPoint[] = [];
 
 export const SystemTelemetryPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
@@ -90,30 +74,35 @@ export const SystemTelemetryPage: React.FC = () => {
 
       // Add slight dynamic shifts to charts
       setOcrData(prev => {
-        const nextBatchNum = parseInt(prev[prev.length - 1].batch.split('#')[1]) + 1;
+        const nextBatchNum = prev.length > 0 ? parseInt(prev[prev.length - 1].batch.split('#')[1]) + 1 : 101;
         const newPoint: OcrLatencyPoint = {
           batch: `Doc #${nextBatchNum}`,
           tesseractLatencySec: parseFloat((0.7 + Math.random() * 1.5).toFixed(2)),
           wordCount: Math.floor(250 + Math.random() * 600),
         };
-        return [...prev.slice(1), newPoint];
+        const updated = [...prev, newPoint];
+        return updated.length > 7 ? updated.slice(1) : updated;
       });
 
       setApiData(prev => {
-        const timeParts = prev[prev.length - 1].time.split(':');
-        let nextMin = parseInt(timeParts[1]) + 1;
-        let nextHr = parseInt(timeParts[0]);
-        if (nextMin >= 60) {
-          nextMin = 0;
-          nextHr = (nextHr + 1) % 24;
+        let timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        if (prev.length > 0) {
+          const timeParts = prev[prev.length - 1].time.split(':');
+          let nextMin = parseInt(timeParts[1]) + 1;
+          let nextHr = parseInt(timeParts[0]);
+          if (nextMin >= 60) {
+            nextMin = 0;
+            nextHr = (nextHr + 1) % 24;
+          }
+          timeStr = `${String(nextHr).padStart(2, '0')}:${String(nextMin).padStart(2, '0')}`;
         }
-        const timeStr = `${String(nextHr).padStart(2, '0')}:${String(nextMin).padStart(2, '0')}`;
         const newPt: ApiLatencyPoint = {
           time: timeStr,
           latencyMs: isStressTest ? Math.floor(180 + Math.random() * 150) : Math.floor(35 + Math.random() * 30),
           reqPerSec: isStressTest ? Math.floor(450 + Math.random() * 200) : Math.floor(100 + Math.random() * 80),
         };
-        return [...prev.slice(1), newPt];
+        const updated = [...prev, newPt];
+        return updated.length > 7 ? updated.slice(1) : updated;
       });
 
     }, 5000);
@@ -390,7 +379,7 @@ export const SystemTelemetryPage: React.FC = () => {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             <span>📡 Status do Gateway: {isStressTest ? <strong style={{ color: 'var(--error)' }}>Sobrecarga Ativa</strong> : <strong style={{ color: 'var(--success)' }}>Operação Normal</strong>}</span>
-            <span>Taxa de requisições atual: <strong>{apiData[apiData.length - 1].reqPerSec} req/s</strong></span>
+            <span>Taxa de requisições atual: <strong>{apiData.length > 0 ? apiData[apiData.length - 1].reqPerSec : 0} req/s</strong></span>
           </div>
         </div>
 

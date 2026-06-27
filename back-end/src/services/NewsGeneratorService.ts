@@ -1,4 +1,4 @@
-import llamaService from './LlamaService';
+import geminiService from './GeminiService';
 import { NEWS_SYSTEM_PROMPT, buildNewsPrompt } from '../utils/promptBuilder';
 import logger from '../utils/logger';
 import { AppError } from '../utils/AppError';
@@ -48,6 +48,59 @@ export class NewsGeneratorService {
     return article;
   }
 
+  /**
+   * Generates a draft based on custom instructions, tone, and length.
+   * Does NOT use cache because of the highly variable nature of custom prompts.
+   */
+  async generateCustomDraft(sourceText: string, tone: string, length: number | string, instructions: string, sourceLabel: string): Promise<NewsArticleJSON> {
+    const customSystemPrompt = `Você é um jornalista de IA avançado escrevendo no formato JSON.
+Formato de saída obrigatório:
+{
+  "titulo": "Título da notícia",
+  "resumo": "Corpo/Resumo da notícia gerada aqui.",
+  "fonte": "${sourceLabel}"
+}
+Regras:
+1. Retorne APENAS um JSON válido. Não inclua Markdown, não inclua "Aqui está o resumo:" etc.
+2. O tom do texto deve ser: ${tone}.
+3. O tamanho máximo do resumo gerado deve ser de: ${length} caracteres. Seja estrito com esse limite de tamanho.
+4. Siga ESTRITAMENTE as seguintes instruções do usuário:
+   "${instructions}"`;
+
+    let textToAnalyze = sourceText;
+    if (sourceText.length > this.MAX_CHARS_PER_CHUNK) {
+       textToAnalyze = sourceText.substring(0, this.MAX_CHARS_PER_CHUNK); // Truncate to avoid context window explosion on custom queries
+       logger.warn(`[news-generator]: Custom draft source text truncated from ${sourceText.length} to ${this.MAX_CHARS_PER_CHUNK} chars.`);
+    }
+
+    const userPrompt = `Baseado no texto a seguir, gere a minuta da notícia seguindo as instruções dadas no prompt do sistema.\n\nTEXTO FONTE:\n${textToAnalyze}`;
+
+    const maxRetries = 2;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info(`[news-generator]: Requesting custom LLM generation (Attempt ${attempt}/${maxRetries})...`);
+        
+        const responseText = await geminiService.generateCompletion(
+          userPrompt,
+          customSystemPrompt,
+          { format: 'json', temperature: 0.2 }
+        );
+
+        return this.parseAndValidateResponse(responseText);
+
+      } catch (error: any) {
+        logger.warn(`[news-generator]: Custom Draft Attempt ${attempt} failed: ${error.message}`);
+        
+        if (attempt === maxRetries) {
+          logger.error(`[news-generator]: Exhausted all retries for custom JSON generation.`);
+          throw new AppError('A IA não conseguiu gerar uma minuta estruturada válida após várias tentativas.', 500);
+        }
+      }
+    }
+
+    throw new AppError('Falha catastrófica no gerador de notícias.', 500);
+  }
+
   private async processInChunks(text: string, maxRetries: number, cacheKey: string): Promise<NewsArticleJSON> {
     const chunks: string[] = [];
     for (let i = 0; i < text.length; i += this.MAX_CHARS_PER_CHUNK) {
@@ -80,7 +133,7 @@ export class NewsGeneratorService {
       try {
         logger.info(`[news-generator]: Requesting LLM generation (Attempt ${attempt}/${maxRetries})...`);
         
-        const responseText = await llamaService.generateCompletion(
+        const responseText = await geminiService.generateCompletion(
           prompt,
           NEWS_SYSTEM_PROMPT,
           { format: 'json', temperature: 0.2 } // Extremely low temp to force strict compliance

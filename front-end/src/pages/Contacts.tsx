@@ -46,6 +46,7 @@ import {
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { showToast } from '@/utils/toastHelper';
+import apiClient from '@/services/apiClient';
 
 interface Contact {
   id: string;
@@ -65,35 +66,8 @@ interface ParsedRow {
   errors: string[];
 }
 
-// Generate mock contacts
-const INITIAL_CONTACTS: Contact[] = Array.from({ length: 115 }, (_, i) => {
-  const categories: Contact['category'][] = ['VIP', 'Cliente', 'Imprensa', 'Geral'];
-  const status: Contact['status'][] = ['Ativo', 'Inativo'];
-  const firstNames = ['Mário', 'Ana', 'Carlos', 'Beatriz', 'Lucas', 'Fernanda', 'Pedro', 'Mariana', 'Roberto', 'Juliana', 'Gabriel', 'Larissa', 'Rodrigo', 'Camila', 'Marcelo'];
-  const lastNames = ['Lopes', 'Oliveira', 'Santos', 'Silva', 'Costa', 'Pereira', 'Almeida', 'Ribeiro', 'Carvalho', 'Gomes', 'Martins', 'Ferreira', 'Souza', 'Rodrigues'];
-  
-  const firstName = firstNames[i % firstNames.length];
-  const lastName = lastNames[(i * 3) % lastNames.length];
-  const cat = categories[(i * 7) % categories.length];
-  const stat = status[(i * 11) % status.length];
-  
-  // Distribute over last 6 months (Months 0 to 5 of 2026)
-  const month = i % 6;
-  const d = new Date(2026, month, 1 + (i % 25));
-  const dateStr = d.toLocaleDateString('pt-BR');
-
-  const phoneSuffix = String(1000 + i).padStart(4, '0');
-  const ddd = 11 + (i % 15);
-
-  return {
-    id: `CT-${1000 + i}`,
-    name: `${firstName} ${lastName}`,
-    phone: `+55 (${ddd}) 98888-${phoneSuffix}`,
-    status: stat,
-    category: cat,
-    dateAdded: dateStr,
-  };
-});
+// Remove mock data generation
+const INITIAL_CONTACTS: Contact[] = [];
 
 type SortField = 'name' | 'dateAdded' | 'status' | 'category';
 type SortOrder = 'asc' | 'desc';
@@ -135,10 +109,35 @@ export const Contacts: React.FC = () => {
   const [importFileName, setImportFileName] = useState<string>('');
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [importProgress, setImportProgress] = useState<number>(0);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Statistics / Analytics Dashboard State
   const [showAnalytics, setShowAnalytics] = useState<boolean>(true);
+
+  // Fetch real contacts
+  const fetchContacts = async () => {
+    try {
+      const res = await apiClient.get('/contacts?page=1&limit=1000');
+      if (res.data?.success) {
+        const mapped = res.data.data.data.map((c: any) => ({
+          id: String(c.id),
+          name: c.name,
+          phone: c.phoneNumber,
+          status: c.active ? 'Ativo' : 'Inativo',
+          category: 'Geral', // Backend may not support categories yet
+          dateAdded: new Date(c.createdAt).toLocaleDateString('pt-BR'),
+        }));
+        setContacts(mapped);
+      }
+    } catch (err) {
+      console.error('Falha ao buscar contatos:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchContacts();
+  }, []);
 
   // Debouncing effect (300ms) for Search
   useEffect(() => {
@@ -227,29 +226,42 @@ export const Contacts: React.FC = () => {
     );
   };
 
-  const handleBulkStatusChange = (newStatus: 'Ativo' | 'Inativo') => {
+  const handleBulkStatusChange = async (newStatus: 'Ativo' | 'Inativo') => {
     if (selectedIds.length === 0) return;
     setIsBulking(true);
-
-    setTimeout(() => {
-      setContacts(prev => prev.map(c => selectedIds.includes(c.id) ? { ...c, status: newStatus } : c));
+    
+    try {
+      const active = newStatus === 'Ativo';
+      await Promise.allSettled(
+        selectedIds.map(id => apiClient.put(`/contacts/${id}`, { active }))
+      );
       showToast.success(`Operação em Lote Concluída: Status de ${selectedIds.length} contatos alterado para ${newStatus}.`);
       setSelectedIds([]);
+      fetchContacts();
+    } catch (error) {
+      showToast.error('Erro ao alterar status em massa.');
+    } finally {
       setIsBulking(false);
-    }, 800);
+    }
   };
 
-  const handleConfirmBulkDelete = () => {
+  const handleConfirmBulkDelete = async () => {
     if (selectedIds.length === 0) return;
     setIsBulking(true);
-
-    setTimeout(() => {
-      setContacts(prev => prev.filter(c => !selectedIds.includes(c.id)));
+    
+    try {
+      await Promise.allSettled(
+        selectedIds.map(id => apiClient.delete(`/contacts/${id}`))
+      );
       showToast.success(`Exclusão em Massa Concluída: ${selectedIds.length} contatos foram removidos permanentemente.`);
       setSelectedIds([]);
-      setIsBulking(false);
       setShowBulkDeleteModal(false);
-    }, 1000);
+      fetchContacts();
+    } catch (error) {
+      showToast.error('Erro ao excluir contatos em massa.');
+    } finally {
+      setIsBulking(false);
+    }
   };
 
   const handleExportCSV = () => {
@@ -289,6 +301,7 @@ export const Contacts: React.FC = () => {
       return;
     }
 
+    setImportFile(file);
     setImportFileName(file.name);
     setParsedRows([]);
 
@@ -332,7 +345,7 @@ export const Contacts: React.FC = () => {
         });
 
         setParsedRows(rows);
-        showToast.success(`Arquivo analisado: ${rows.length} linhas processadas.`);
+        showToast.success(`Arquivo analisado: ${rows.length} linhas preparadas.`);
       },
       error: () => {
         showToast.error('Falha ao interpretar o arquivo CSV. Verifique a codificação.');
@@ -350,43 +363,42 @@ export const Contacts: React.FC = () => {
     }
   };
 
-  const handleExecuteImport = () => {
-    const validRows = parsedRows.filter(r => r.valid);
-    if (validRows.length === 0) {
-      showToast.error('Nenhum contato válido para importar.');
+  const handleExecuteImport = async () => {
+    if (!importFile) {
+      showToast.error('Nenhum arquivo para importar.');
       return;
     }
 
     setIsImporting(true);
-    setImportProgress(0);
+    setImportProgress(20);
 
-    const total = validRows.length;
-    let current = 0;
-
-    const interval = window.setInterval(() => {
-      current += Math.ceil(total / 10);
-      if (current >= total) {
-        clearInterval(interval);
-        setImportProgress(100);
-
-        const newContacts: Contact[] = validRows.map((r, i) => ({
-          id: `CT-IMP-${Date.now().toString().slice(-3)}-${i}`,
-          name: r.name,
-          phone: r.phone,
-          status: 'Ativo',
-          category: r.category as Contact['category'],
-          dateAdded: new Date().toLocaleDateString('pt-BR'),
-        }));
-
-        setContacts(prev => [...newContacts, ...prev]);
-        setIsImporting(false);
-        setShowImportPanel(false);
-        setParsedRows([]);
-        showToast.success(`${validRows.length} contatos foram importados com sucesso!`);
-      } else {
-        setImportProgress(Math.min(99, Math.floor((current / total) * 100)));
-      }
-    }, 150);
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      
+      const res = await apiClient.post('/contacts/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
+          setImportProgress(Math.min(90, percentCompleted));
+        }
+      });
+      
+      setImportProgress(100);
+      setIsImporting(false);
+      setShowImportPanel(false);
+      setParsedRows([]);
+      setImportFile(null);
+      
+      const summary = res.data?.data;
+      showToast.success(`${summary?.imported || 0} contatos foram importados com sucesso!`);
+      
+      fetchContacts();
+    } catch (error) {
+      console.error(error);
+      showToast.error('Falha na importação do arquivo.');
+      setIsImporting(false);
+    }
   };
 
   const handleOpenNewModal = () => {
@@ -425,42 +437,62 @@ export const Contacts: React.FC = () => {
     else return { valid: false, text: 'Digite o DDD e o número do celular', color: 'var(--text-muted)' };
   };
 
-  const handleSaveContact = (e: React.FormEvent) => {
+  const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingContact || !editingContact.name.trim()) { showToast.error('Por favor, informe o Nome Completo do contato.'); return; }
     const validity = checkPhoneValidity(editingContact.phone);
     if (!validity.valid) { showToast.error('Número de celular inválido. Verifique o formato internacional com DDD.'); return; }
 
     setIsSaving(true);
-    setTimeout(() => {
+    try {
       const exists = contacts.find(c => c.id === editingContact.id);
+      
       if (exists) {
-        setContacts(prev => prev.map(c => c.id === editingContact.id ? editingContact : c));
-        showToast.success(`Contato "${editingContact.name}" atualizado com sucesso via API PUT.`);
+        await apiClient.put(`/contacts/${editingContact.id}`, {
+          name: editingContact.name,
+          active: editingContact.status === 'Ativo'
+        });
+        showToast.success(`Contato "${editingContact.name}" atualizado com sucesso via API.`);
       } else {
-        setContacts(prev => [editingContact, ...prev]);
-        showToast.success(`Novo contato cadastrado com sucesso via API POST.`);
+        await apiClient.post('/contacts', {
+          name: editingContact.name,
+          phoneNumber: editingContact.phone.replace(/\D/g, '') // Send numeric only or parsed format based on backend
+        });
+        showToast.success(`Novo contato cadastrado com sucesso via API.`);
       }
-      setIsSaving(false);
+      
+      await fetchContacts();
       setShowEditModal(false);
       setEditingContact(null);
-    }, 1000);
+    } catch (error) {
+      showToast.error('Erro ao salvar o contato. Verifique os dados e tente novamente.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDeleteOne = (id: string, name: string) => {
-    setContacts(prev => prev.filter(c => c.id !== id));
-    showToast.success(`Contato "${name}" excluído com sucesso.`);
+  const handleDeleteOne = async (id: string, name: string) => {
+    try {
+      await apiClient.delete(`/contacts/${id}`);
+      showToast.success(`Contato "${name}" excluído com sucesso.`);
+      fetchContacts();
+    } catch (error) {
+      showToast.error('Erro ao excluir o contato.');
+    }
   };
 
-  const handleToggleStatusOne = (id: string) => {
-    setContacts(prev => prev.map(c => {
-      if (c.id === id) {
-        const nextStat = c.status === 'Ativo' ? 'Inativo' : 'Ativo';
-        showToast.info(`O status foi alterado para ${nextStat}.`);
-        return { ...c, status: nextStat };
-      }
-      return c;
-    }));
+  const handleToggleStatusOne = async (id: string) => {
+    const contact = contacts.find(c => c.id === id);
+    if (!contact) return;
+    
+    const nextStat = contact.status === 'Ativo' ? 'Inativo' : 'Ativo';
+    try {
+      await apiClient.put(`/contacts/${id}`, { active: nextStat === 'Ativo' });
+      showToast.info(`O status foi alterado para ${nextStat}.`);
+      fetchContacts();
+    } catch (error) {
+      showToast.error('Erro ao alterar status.');
+    }
   };
 
   const getCategoryBadgeVariant = (cat: Contact['category']) => {

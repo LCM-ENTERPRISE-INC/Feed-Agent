@@ -110,6 +110,32 @@ export class WhatsAppController {
       next(err);
     }
   }
+
+  /**
+   * POST /api/whatsapp/restart
+   * Restarts the WhatsApp session to generate a new QR Code.
+   */
+  async restart(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await whatsAppService.restart();
+      ApiResponse.success(res, null, 'WhatsApp session restarted and new QR generation initiated.');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/whatsapp/logout
+   * Logs out from the active WhatsApp session and clears credentials.
+   */
+  async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await whatsAppService.logout();
+      ApiResponse.success(res, null, 'WhatsApp session disconnected successfully.');
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export default new WhatsAppController();

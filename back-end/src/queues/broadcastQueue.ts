@@ -27,6 +27,7 @@ export interface BroadcastJobData {
   userId: number;
   imagePath?: string | null;
   contacts: Pick<Contact, 'id' | 'phoneNumber' | 'name'>[];
+  delayMs?: number;
 }
 
 export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
@@ -68,9 +69,9 @@ export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
         });
 
         try {
-          // 2. Add random delay between 5 to 15 seconds (5000ms - 15000ms) to avoid spam filters
-          const randomDelayMs = Math.floor(Math.random() * (15000 - 5000 + 1)) + 5000;
-          const messageId = await whatsAppService.sendMessage(contact.phoneNumber, messageText, randomDelayMs, job.data.imagePath || undefined);
+          // 2. Use the provided delayMs or fallback to a default 3.5s delay
+          const delayMs = job.data.delayMs || 3500;
+          const messageId = await whatsAppService.sendMessage(contact.phoneNumber, messageText, delayMs, job.data.imagePath || undefined);
           
           // 3. Mark as sent and associate messageId
           await feedHistoryService.updateMessageStatus(String(logRecord._id), 'sent', undefined, messageId);

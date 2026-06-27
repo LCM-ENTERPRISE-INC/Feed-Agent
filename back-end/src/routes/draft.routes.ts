@@ -189,5 +189,65 @@ router.post('/:id/reject', draftController.rejectDraft.bind(draftController));
  *         description: Draft not found or does not belong to user.
  */
 router.post('/:id/cancel', draftController.cancelDraft.bind(draftController));
+/**
+ * @openapi
+ * /api/drafts/broadcast/launch:
+ *   post:
+ *     summary: Launch a broadcast to specific contacts
+ *     description: Enqueues a broadcast job for all APPROVED drafts to the selected contacts.
+ *     tags: [Drafts]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - contactIds
+ *               - delaySeconds
+ *             properties:
+ *               contactIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *               delaySeconds:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Broadcast launched successfully.
+ *       400:
+ *         description: Invalid input or missing fields.
+ *       401:
+ *         description: Unauthorized.
+ */
+router.post('/broadcast/launch', draftController.launchBroadcast.bind(draftController));
+
+/**
+ * @openapi
+ * /api/drafts/{id}:
+ *   delete:
+ *     summary: Delete a draft
+ *     description: Permanently deletes a draft from the database.
+ *     tags: [Drafts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The ID of the draft to delete.
+ *     responses:
+ *       200:
+ *         description: Draft deleted successfully.
+ *       400:
+ *         description: Invalid draft ID.
+ *       401:
+ *         description: Unauthorized.
+ */
+router.delete('/:id', draftController.deleteDraft.bind(draftController));
 
 export default router;

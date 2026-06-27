@@ -14,40 +14,7 @@ interface SessionLog {
   accessedAt: string;
 }
 
-const mockLogs: SessionLog[] = [
-  {
-    id: 'log_1',
-    device: 'Windows 11 / Chrome 124.0.0',
-    deviceType: 'desktop',
-    ip: '189.122.33.220',
-    location: 'São Paulo, SP - Brasil',
-    accessedAt: '12/05/2026 - 00:36:31',
-  },
-  {
-    id: 'log_2',
-    device: 'iPhone 15 Pro / Safari Mobile',
-    deviceType: 'mobile',
-    ip: '177.89.44.11',
-    location: 'Rio de Janeiro, RJ - Brasil',
-    accessedAt: '10/05/2026 - 22:15:08',
-  },
-  {
-    id: 'log_3',
-    device: 'macOS Sonoma / Safari Desktop',
-    deviceType: 'desktop',
-    ip: '189.122.33.220',
-    location: 'São Paulo, SP - Brasil',
-    accessedAt: '09/05/2026 - 15:40:22',
-  },
-  {
-    id: 'log_4',
-    device: 'iPad Pro / Chrome iOS',
-    deviceType: 'tablet',
-    ip: '189.122.33.220',
-    location: 'São Paulo, SP - Brasil',
-    accessedAt: '05/05/2026 - 09:12:54',
-  },
-];
+const mockLogs: SessionLog[] = [];
 
 export const Profile: React.FC = () => {
   const user = useAuthStore((state) => state.user);
@@ -221,7 +188,7 @@ export const Profile: React.FC = () => {
               border: '1px solid var(--border)',
             }}>
               <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Sessão Iniciada em:</span>
-              <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Hoje, {mockLogs[0].accessedAt.split(' - ')[1]}</span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Hoje, {mockLogs.length > 0 ? mockLogs[0].accessedAt.split(' - ')[1] : '--:--'}</span>
             </div>
 
             <div style={{
@@ -282,24 +249,32 @@ export const Profile: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {mockLogs.map((log) => (
-                <tr key={log.id} style={{
-                  borderBottom: '1px solid var(--border)',
-                  backgroundColor: 'transparent',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.01)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                >
-                  <td style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 500 }}>
-                    <span style={{ color: 'var(--primary)' }}>{getDeviceIcon(log.deviceType)}</span>
-                    <span>{log.device}</span>
+              {mockLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    Nenhum log de sessão encontrado.
                   </td>
-                  <td style={{ padding: '16px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{log.ip}</td>
-                  <td style={{ padding: '16px', color: 'var(--text-muted)' }}>{log.location}</td>
-                  <td style={{ padding: '16px', textAlign: 'right', color: 'var(--text-muted)' }}>{log.accessedAt}</td>
                 </tr>
-              ))}
+              ) : (
+                mockLogs.map((log) => (
+                  <tr key={log.id} style={{
+                    borderBottom: '1px solid var(--border)',
+                    backgroundColor: 'transparent',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.01)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <td style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 500 }}>
+                      <span style={{ color: 'var(--primary)' }}>{getDeviceIcon(log.deviceType)}</span>
+                      <span>{log.device}</span>
+                    </td>
+                    <td style={{ padding: '16px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{log.ip}</td>
+                    <td style={{ padding: '16px', color: 'var(--text-muted)' }}>{log.location}</td>
+                    <td style={{ padding: '16px', textAlign: 'right', color: 'var(--text-muted)' }}>{log.accessedAt}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

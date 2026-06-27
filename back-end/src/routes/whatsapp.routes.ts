@@ -84,4 +84,26 @@ router.get('/qr/stream', authMiddleware, whatsAppController.streamQr.bind(whatsA
  */
 router.post('/test-message', authMiddleware, whatsAppController.sendTestMessage.bind(whatsAppController));
 
+/**
+ * @openapi
+ * /api/whatsapp/restart:
+ *   post:
+ *     summary: Restart the WhatsApp session and generate a new QR
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/restart', authMiddleware, whatsAppController.restart.bind(whatsAppController));
+
+/**
+ * @openapi
+ * /api/whatsapp/logout:
+ *   post:
+ *     summary: Disconnect and logout from the active WhatsApp session
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/logout', authMiddleware, whatsAppController.logout.bind(whatsAppController));
+
 export default router;

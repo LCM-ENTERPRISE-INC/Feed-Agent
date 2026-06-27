@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Sun, Moon, Wifi, Menu, ChevronDown, User, LogOut, Bell } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useSseGateway } from '@/hooks/useSseGateway';
+import type { SseEvent } from '@/hooks/useSseGateway';
+import apiClient from '@/services/apiClient';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -21,6 +24,25 @@ export const Header: React.FC<HeaderProps> = ({
   // Read Zustand store parameters
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+
+  const [waState, setWaState] = useState<'open' | 'connecting' | 'close' | 'banned'>('close');
+
+  useEffect(() => {
+    // Only fetch status if user is logged in
+    if (user) {
+      apiClient.get('/whatsapp/status').then(res => {
+        if (res.data?.success) {
+          setWaState(res.data.data.state);
+        }
+      }).catch(() => {});
+    }
+  }, [user]);
+
+  useSseGateway((event: SseEvent) => {
+    if (event.type === 'connected') setWaState('open');
+    else if (event.type === 'qr' || event.type === 'qr:timeout') setWaState('connecting');
+    else if (event.type === 'disconnected') setWaState('close');
+  });
 
   const getFriendlyTitle = (path: string) => {
     switch (path) {
@@ -62,9 +84,14 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Header Controls */}
       <div className="header-right">
         {/* Status Connection Indicator */}
-        <div className="header-status-badge">
-          <Wifi size={14} className="status-icon-glow" />
-          <span className="status-text">WhatsApp Conectado</span>
+        <div className="header-status-badge" style={{ 
+            backgroundColor: waState === 'open' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(234, 179, 8, 0.1)',
+            borderColor: waState === 'open' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(234, 179, 8, 0.3)',
+        }}>
+          <Wifi size={14} className="status-icon-glow" style={{ color: waState === 'open' ? 'var(--success)' : '#eab308' }} />
+          <span className="status-text" style={{ color: waState === 'open' ? 'var(--success)' : '#eab308' }}>
+            {waState === 'open' ? 'WhatsApp Conectado' : 'WhatsApp Pendente'}
+          </span>
         </div>
 
         {/* Theme Toggle Button */}

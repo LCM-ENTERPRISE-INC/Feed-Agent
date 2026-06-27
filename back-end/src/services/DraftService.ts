@@ -101,40 +101,61 @@ export class DraftService {
   }
 
   /**
-   * Triggers the broadcast event for an approved draft.
-   * Fetches active contacts and adds a job to the BullMQ broadcast worker.
+   * Deletes a draft completely from the database.
    */
-  async triggerBroadcastEvent(draftId: number, userId: number, includeImage = false): Promise<void> {
-    try {
-      logger.info(`[draft-service]: Draft ${draftId} approved by user ${userId}. Fetching active contacts...`);
-      
-      const draft = await this.getDraftById(draftId, userId);
-      if (!draft) throw new AppError('Draft not found', 404);
-
-      // We assume max 10,000 contacts for a single broadcast batch in this architecture
-      const paginatedContacts = await contactService.findAllByUser(userId, { page: 1, limit: 10000 }, true);
-      
-      if (paginatedContacts.data.length === 0) {
-        logger.warn(`[draft-service]: User ${userId} has no active contacts. Broadcast aborted.`);
-        return;
+  async deleteDraft(draftId: number, userId: number): Promise<void> {
+    await prisma.draft.deleteMany({
+      where: {
+        id: draftId,
+        userId: userId
       }
+    });
+    logger.info(`[draft-service]: Deleted draft ${draftId} for user ${userId}.`);
+  }
 
-      await broadcastQueue.add(BROADCAST_QUEUE_NAME, {
-        draftId,
+  /**
+   * Enqueues a broadcast for ALL approved drafts to the SELECTED contacts.
+   */
+  async launchBroadcast(userId: number, contactIds: number[], delaySeconds: number): Promise<void> {
+    // 1. Fetch all APPROVED drafts for the user
+    const approvedDrafts = await prisma.draft.findMany({
+      where: { userId, status: DraftStatus.APPROVED }
+    });
+
+    if (approvedDrafts.length === 0) {
+      throw new Error('Nenhuma minuta aprovada encontrada para disparo.');
+    }
+
+    // 2. Fetch the selected contacts
+    const contacts = await prisma.contact.findMany({
+      where: {
+        id: { in: contactIds },
         userId,
-        imagePath: includeImage ? draft.imagePath : undefined,
-        contacts: paginatedContacts.data.map(c => ({
+        active: true
+      }
+    });
+
+    if (contacts.length === 0) {
+      throw new Error('Nenhum contato válido selecionado.');
+    }
+
+    // 3. For each approved draft, enqueue a broadcast job
+    for (const draft of approvedDrafts) {
+      await broadcastQueue.add(BROADCAST_QUEUE_NAME, {
+        draftId: draft.id,
+        userId,
+        imagePath: draft.imagePath,
+        contacts: contacts.map(c => ({
           id: c.id,
           phoneNumber: c.phoneNumber,
           name: c.name
-        }))
+        })),
+        delayMs: delaySeconds * 1000
       });
-
-      logger.info(`[draft-service]: Queued broadcast job for Draft ${draftId} to ${paginatedContacts.data.length} contacts.`);
-    } catch (err) {
-      logger.error(`[draft-service]: Failed to trigger broadcast for draft ${draftId}: ${(err as Error).message}`);
+      logger.info(`[draft-service]: Queued broadcast job for Draft ${draft.id} to ${contacts.length} contacts with ${delaySeconds}s delay.`);
     }
   }
+
   /**
    * Cancels an ongoing or pending broadcast.
    * - Updates status to CANCELLED in Postgres.

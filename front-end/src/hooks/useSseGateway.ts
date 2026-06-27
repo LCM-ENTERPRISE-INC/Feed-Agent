@@ -32,7 +32,7 @@ export const useSseGateway = (onEvent?: (event: SseEvent) => void) => {
     const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
     // Clean trailing slash if present
     const cleanBaseURL = baseURL.replace(/\/+$/, '');
-    const sseURL = `${cleanBaseURL}/whatsapp/status/sse?token=${token}`;
+    const sseURL = `${cleanBaseURL}/whatsapp/qr/stream?token=${token}`;
 
     setConnectionStatus('connecting');
     const eventSource = new EventSource(sseURL);
@@ -42,16 +42,23 @@ export const useSseGateway = (onEvent?: (event: SseEvent) => void) => {
       setErrorCount(0);
     };
 
-    eventSource.onmessage = (event) => {
+    // Helper to process named events
+    const handleEvent = (type: string) => (event: MessageEvent) => {
       try {
-        const parsed: SseEvent = JSON.parse(event.data);
+        const payload = event.data ? JSON.parse(event.data) : null;
         if (onEventRef.current) {
-          onEventRef.current(parsed);
+          onEventRef.current({ type, payload, timestamp: new Date().toISOString() });
         }
       } catch (err) {
-        console.error('[SSE] Failed to parse event JSON data payload:', err);
+        console.error(`[SSE] Failed to parse payload for event ${type}:`, err);
       }
     };
+
+    eventSource.addEventListener('qr', handleEvent('qr'));
+    eventSource.addEventListener('connected', handleEvent('connected'));
+    eventSource.addEventListener('disconnected', handleEvent('disconnected'));
+    eventSource.addEventListener('qr:timeout', handleEvent('qr:timeout'));
+    eventSource.addEventListener('heartbeat', () => { /* ignore heartbeat */ });
 
     eventSource.onerror = (err) => {
       console.warn('[SSE] EventSource connection encountered error. Reconnecting...', err);

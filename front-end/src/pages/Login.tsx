@@ -5,6 +5,7 @@ import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { useAuthStore } from '@/store/authStore';
 import { showToast } from '@/utils/toastHelper';
+import apiClient from '@/services/apiClient';
 import '@/styles/login.css';
 
 export const Login: React.FC = () => {
@@ -19,7 +20,7 @@ export const Login: React.FC = () => {
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isPasswordValid = password.length >= 4;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -53,26 +54,24 @@ export const Login: React.FC = () => {
 
     setLoading(true);
 
-    setTimeout(() => {
-      try {
-        const computedName = email.split('@')[0];
-        const userProfile = {
-          id: 'user_1',
-          name: computedName.charAt(0).toUpperCase() + computedName.slice(1),
-          email: email.toLowerCase(),
-        };
-
-        // Complete authenticate state
-        login('mock-jwt-token-feedagent-2026', userProfile);
-        
-        showToast.success(`Bem-vindo de volta, ${userProfile.name}!`);
-        setLoading(false);
+    try {
+      const res = await apiClient.post('/auth/login', { email, password });
+      if (res.data?.success) {
+        const { token, user } = res.data.data;
+        login(token, { id: String(user.id), name: user.name, email: user.email });
+        showToast.success(`Bem-vindo de volta, ${user.name}!`);
         navigate('/dashboard');
-      } catch (err) {
-        setLoading(false);
-        showToast.error(err, 'Erro durante o fluxo de autenticação local.');
+      } else {
+        setError(res.data?.error || 'Falha na autenticação.');
+        showToast.error('Falha na autenticação.');
       }
-    }, 1200);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Credenciais inválidas ou erro no servidor.';
+      setError(errorMsg);
+      showToast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

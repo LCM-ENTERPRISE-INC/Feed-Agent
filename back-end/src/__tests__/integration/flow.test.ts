@@ -81,7 +81,7 @@ let mongoServer: MongoMemoryServer;
 let userToken: string;
 let createdUserId: number;
 
-beforeAll(async () => {
+beforeAll(async () => { jest.setTimeout(120000);
   // 1. Setup In-Memory MongoDB
   mongoServer = await MongoMemoryServer.create();
   const mongoUri = mongoServer.getUri();

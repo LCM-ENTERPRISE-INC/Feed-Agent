@@ -4,19 +4,20 @@
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-heading: 'Outfit', sans-serif;
 
-  /* HSL Colors */
-  --primary-hue: 250;
-  --primary-sat: 84%;
-  --primary-lig: 54%;
+  /* HSL Colors - Legatus Theme */
+  --primary-hue: 45; /* Dourado Metálico */
+  --primary-sat: 90%;
+  --primary-lig: 50%;
   --primary: hsl(var(--primary-hue) var(--primary-sat) var(--primary-lig));
   --primary-hover: hsl(var(--primary-hue) var(--primary-sat) calc(var(--primary-lig) - 8%));
-  --primary-alpha: rgba(99, 102, 241, 0.15);
+  --primary-alpha: rgba(230, 180, 40, 0.15);
 
-  --background-hsl: 210 40% 98%;
-  --surface-hsl: 0 0% 100%;
-  --text-main-hsl: 222 47% 12%;
-  --text-muted-hsl: 215 16% 47%;
-  --border-hsl: 214 32% 91%;
+  /* Branco Metálico */
+  --background-hsl: 210 15% 96%;
+  --surface-hsl: 210 15% 99%;
+  --text-main-hsl: 210 10% 12%;
+  --text-muted-hsl: 210 10% 47%;
+  --border-hsl: 210 15% 88%;
   
   --success-hsl: 142 76% 36%;
   --error-hsl: 346 84% 50%;
@@ -33,16 +34,16 @@
   --warning: hsl(var(--warning-hsl));
 
   /* Glassmorphism system */
-  --glass-bg: rgba(255, 255, 255, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-bg: rgba(250, 250, 252, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.4);
   --glass-blur: blur(16px);
-  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.06);
+  --glass-shadow: 0 8px 32px 0 rgba(20, 20, 20, 0.08);
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
-  --shadow-glow: 0 0 15px rgba(99, 102, 241, 0.25);
+  --shadow-glow: 0 0 15px rgba(230, 180, 40, 0.25);
 
   /* Borders & Radius */
   --radius-sm: 8px;
@@ -57,15 +58,16 @@
 }
 
 [data-theme='dark'] {
-  --background-hsl: 224 71% 4%;
-  --surface-hsl: 222 47% 7%;
-  --text-main-hsl: 210 40% 98%;
-  --text-muted-hsl: 215 20% 65%;
-  --border-hsl: 217 32% 12%;
+  /* Preto Metálico */
+  --background-hsl: 210 10% 6%;
+  --surface-hsl: 210 10% 10%;
+  --text-main-hsl: 210 15% 95%;
+  --text-muted-hsl: 210 15% 65%;
+  --border-hsl: 210 10% 18%;
 
-  --glass-bg: rgba(15, 23, 42, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.05);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+  --glass-bg: rgba(20, 22, 25, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
 
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);

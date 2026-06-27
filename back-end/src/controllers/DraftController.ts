@@ -105,10 +105,7 @@ export class DraftController {
 
       const updatedDraft = await draftService.updateDraftStatus(draftId, DraftStatus.APPROVED);
 
-      // Trigger the broadcast event (will be fully implemented via Queues in Sprint 30)
-      await draftService.triggerBroadcastEvent(draftId, userId, includeImage);
-
-      ApiResponse.success(res, updatedDraft, 'Draft approved and queued for broadcasting.', 200);
+      ApiResponse.success(res, updatedDraft, 'Draft approved successfully.', 200);
     } catch (err) {
       next(err);
     }
@@ -162,6 +159,51 @@ export class DraftController {
       await draftService.cancelBroadcast(draftId, userId);
 
       ApiResponse.success(res, null, 'Broadcast cancelled successfully.', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+  /**
+   * DELETE /api/drafts/:id
+   * Hard deletes a draft.
+   */
+  async deleteDraft(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const draftId = parseInt(req.params.id as string, 10);
+
+      if (isNaN(draftId)) {
+        throw new AppError('Invalid draft ID provided.', 400);
+      }
+
+      await draftService.deleteDraft(draftId, userId);
+
+      ApiResponse.success(res, null, 'Draft deleted successfully.', 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/drafts/broadcast/launch
+   * Launches a broadcast to specific contacts for all approved drafts.
+   */
+  async launchBroadcast(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const { contactIds, delaySeconds } = req.body;
+
+      if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0) {
+        throw new AppError('A valid array of contactIds is required.', 400);
+      }
+
+      if (typeof delaySeconds !== 'number' || delaySeconds < 1) {
+        throw new AppError('A valid delaySeconds (>= 1) is required.', 400);
+      }
+
+      await draftService.launchBroadcast(userId, contactIds, delaySeconds);
+
+      ApiResponse.success(res, null, 'Broadcast launched successfully for selected contacts.', 200);
     } catch (err) {
       next(err);
     }

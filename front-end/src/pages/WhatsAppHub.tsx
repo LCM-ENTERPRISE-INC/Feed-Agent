@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Phone, 
-  QrCode, 
+  Phone,
   AlertTriangle, 
   RefreshCw, 
   CheckCircle2, 
@@ -29,6 +28,7 @@ import { Alert } from '@/components/Alert';
 import { useSseGateway } from '@/hooks/useSseGateway';
 import type { SseEvent } from '@/hooks/useSseGateway';
 import { showToast } from '@/utils/toastHelper';
+import apiClient from '@/services/apiClient';
 
 type WaConnectionState = 'open' | 'connecting' | 'close' | 'banned';
 
@@ -48,7 +48,7 @@ const mockStabilityLogs: StabilityLog[] = [
 
 export const WhatsAppHub: React.FC = () => {
   const [waState, setWaState] = useState<WaConnectionState>('connecting');
-  const [qrPayload, setQrPayload] = useState<string>('mock-qr-code-data-string');
+  const [qrPayload, setQrPayload] = useState<string>('');
   const [lastUpdated, setLastUpdated] = useState<string>('Hoje, 00:36');
   const phoneInstance = 'Canal Principal (5511999990000)';
 
@@ -109,30 +109,49 @@ export const WhatsAppHub: React.FC = () => {
     };
   }, [waState, qrPayload]);
 
-  // Connect to SSE Gateway to listen to incoming events
+  useEffect(() => {
+    const fetchInitialStatus = async () => {
+      try {
+        const res = await apiClient.get('/whatsapp/status');
+        if (res.data?.success) {
+          const { state, qrCode } = res.data.data;
+          setWaState(state);
+          if (qrCode) setQrPayload(qrCode);
+        }
+      } catch (err) {
+        console.error('Falha ao obter status do WhatsApp:', err);
+      }
+    };
+    fetchInitialStatus();
+  }, []);
+
   const handleSseEvent = (event: SseEvent) => {
     switch (event.type) {
-      case 'wa:open':
+      case 'connected':
         setWaState('open');
         setLastUpdated(new Date().toLocaleTimeString());
         setShowCelebrationModal(true);
         showToast.success('WhatsApp conectado e autenticado com sucesso!');
         break;
-      case 'wa:qr':
+      case 'qr':
         setWaState('connecting');
-        setQrPayload(event.payload);
+        if (event.payload?.qrCode) {
+          setQrPayload(event.payload.qrCode);
+        }
         setLastUpdated(new Date().toLocaleTimeString());
         restartQrTimer();
         break;
-      case 'wa:close':
+      case 'disconnected':
         setWaState('close');
+        setQrPayload(''); // Clear stale QR on disconnect
         setLastUpdated(new Date().toLocaleTimeString());
         showToast.info('Conexão do WhatsApp encerrada.');
         break;
-      case 'wa:banned':
-        setWaState('banned');
+      case 'qr:timeout':
+        setWaState('connecting');
+        setQrExpired(true);
+        setQrPayload(''); // Clear expired QR
         setLastUpdated(new Date().toLocaleTimeString());
-        showToast.error('ATENÇÃO: A instância do WhatsApp foi reportada como banida.');
         break;
       default:
         break;
@@ -141,36 +160,36 @@ export const WhatsAppHub: React.FC = () => {
 
   const { connectionStatus } = useSseGateway(handleSseEvent);
 
-  // Simulation controls for interactive demonstration
-  const simulateState = (newState: WaConnectionState) => {
-    setWaState(newState);
-    setLastUpdated(new Date().toLocaleTimeString());
-    
-    if (newState === 'open') {
-      setShowCelebrationModal(true);
-      showToast.success('Simulação: Instância conectada com sucesso!');
-    } else if (newState === 'connecting') {
-      setQrPayload('mock-qr-code-data-string');
-      restartQrTimer();
-      showToast.info('Simulação: Gerando novo QR Code Base64 com timeout de 60s...');
-    } else if (newState === 'close') {
-      showToast.info('Simulação: Instância desconectada.');
-    } else if (newState === 'banned') {
-      showToast.error('Simulação: Instância reportada como banida!');
+  // Real API call to request a new QR Code
+  const handleRequestNewQr = async () => {
+    try {
+      showToast.info('Requisitando novo QR Code...');
+      // Reset UI immediately to show a "waiting" state
+      setQrPayload('');
+      setQrExpired(false);
+      setWaState('connecting');
+      await apiClient.post('/whatsapp/restart');
+      // The SSE gateway will push the 'qr' event with the new QR Code image.
+    } catch (err) {
+      showToast.error('Falha ao requisitar novo QR Code.');
     }
   };
 
-  // Secure Remote Disconnection simulation
-  const handleConfirmDisconnect = () => {
+  // Secure Remote Disconnection via API
+  const handleConfirmDisconnect = async () => {
     setDisconnecting(true);
 
-    setTimeout(() => {
-      setDisconnecting(false);
+    try {
+      await apiClient.post('/whatsapp/logout');
       setShowDisconnectModal(false);
       setWaState('close');
       setLastUpdated(new Date().toLocaleTimeString());
       showToast.success('Desconexão remota concluída: Sessão do Baileys encerrada via API.');
-    }, 1200);
+    } catch (err) {
+      showToast.error('Falha ao tentar desconectar a instância.');
+    } finally {
+      setDisconnecting(false);
+    }
   };
 
   // International phone mask format helper
@@ -186,8 +205,8 @@ export const WhatsAppHub: React.FC = () => {
     setTestPhone(formatted);
   };
 
-  // Test Message Submittal Simulation
-  const handleSendTestMessage = (e: React.FormEvent) => {
+  // Test Message Submittal real API
+  const handleSendTestMessage = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const digitsOnly = testPhone.replace(/\D/g, '');
@@ -203,7 +222,12 @@ export const WhatsAppHub: React.FC = () => {
 
     setTestSendingState('typing');
 
-    setTimeout(() => {
+    try {
+      await apiClient.post('/whatsapp/test-message', {
+        phoneNumber: testPhone,
+        message: testMessage
+      });
+
       setTestSendingState('sent');
       setLastReceipt({
         id: `WA-TX-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -213,7 +237,10 @@ export const WhatsAppHub: React.FC = () => {
       showToast.success('Mensagem de teste enviada e confirmada via webhook do Baileys!');
 
       setTimeout(() => setTestSendingState('idle'), 5000);
-    }, 2500);
+    } catch (error) {
+      showToast.error('Falha ao enviar mensagem de teste. Verifique a conexão e tente novamente.');
+      setTestSendingState('idle');
+    }
   };
 
   const toggleChecklistItem = (id: string) => {
@@ -493,14 +520,25 @@ export const WhatsAppHub: React.FC = () => {
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Handshake & QR Code</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>{waState === 'open' ? 'Conexão ativa e segura. Nenhum QR Code adicional necessário.' : 'Aponte o leitor do WhatsApp Corporativo para parear a sessão'}</p>
           </div>
-          <div style={{ padding: '28px', backgroundColor: waState === 'open' ? 'rgba(16, 185, 129, 0.05)' : 'white', borderRadius: '20px', boxShadow: 'var(--shadow-lg)', border: `4px solid ${waState === 'open' ? 'var(--success)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '240px', height: '240px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ padding: '28px', backgroundColor: waState === 'open' ? 'rgba(16, 185, 129, 0.05)' : (qrPayload.startsWith('data:image') ? 'white' : 'rgba(15, 23, 42, 0.5)'), borderRadius: '20px', boxShadow: 'var(--shadow-lg)', border: `4px solid ${waState === 'open' ? 'var(--success)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '240px', height: '240px', position: 'relative', overflow: 'hidden' }}>
             {waState === 'open' ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: 'var(--success)' }}><CheckCircle2 size={72} /><span style={{ fontSize: '1.1rem', fontWeight: 700 }}>Pareado com Sucesso</span></div>
             ) : waState === 'banned' ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: 'var(--error)' }}><ShieldAlert size={72} /><span style={{ fontSize: '1.1rem', fontWeight: 700 }}>Sessão Interrompida</span></div>
             ) : (
               <>
-                {qrPayload.startsWith('data:image') ? <img src={qrPayload} alt="WhatsApp QR" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: qrExpired ? 'blur(8px)' : 'none', transition: 'filter 0.3s ease' }} /> : <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', filter: qrExpired ? 'blur(8px)' : 'none', transition: 'filter 0.3s ease' }}><QrCode size={160} style={{ color: '#0f172a' }} /></div>}
+                {qrPayload.startsWith('data:image') ? (
+                  <img
+                    src={qrPayload}
+                    alt="WhatsApp QR"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', filter: qrExpired ? 'blur(8px)' : 'none', transition: 'filter 0.3s ease', animation: 'fade-in 0.4s ease-out' }}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: '#94a3b8' }}>
+                    <RefreshCw size={56} className="animate-spin" style={{ color: 'var(--primary)', opacity: 0.7 }} />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>Aguardando QR...</span>
+                  </div>
+                )}
                 {qrExpired && (
                   <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', color: '#0f172a', padding: '16px' }}>
                     <Clock size={36} style={{ color: 'var(--error)' }} />
@@ -517,7 +555,7 @@ export const WhatsAppHub: React.FC = () => {
               <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: '4px', overflow: 'hidden' }}><div style={{ width: `${progressPercent}%`, height: '100%', backgroundColor: progressColor, transition: 'width 1s linear, background-color 0.3s ease' }} /></div>
             </div>
           )}
-          <Button type="button" variant="secondary" icon={RefreshCw} onClick={() => simulateState('connecting')} style={{ width: '100%', marginTop: '8px' }}>{qrExpired ? 'Gerar Novo QR Code Agora' : 'Requisitar Novo QR Code'}</Button>
+          <Button type="button" variant="secondary" icon={RefreshCw} onClick={handleRequestNewQr} style={{ width: '100%', marginTop: '8px' }}>{qrExpired ? 'Gerar Novo QR Code Agora' : 'Requisitar Novo QR Code'}</Button>
         </div>
       </div>
 
@@ -695,10 +733,7 @@ export const WhatsAppHub: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><Cpu size={18} style={{ color: 'var(--primary)' }} /><h4 style={{ fontSize: '1rem', fontWeight: 700 }}>Controles de Simulação de Estados (Sandbox de Testes)</h4></div>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Alterne interativamente entre os estados reativos para testar o comportamento da interface e dos alarmes visuais.</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-          <Button type="button" variant="primary" onClick={() => simulateState('open')} style={{ backgroundColor: 'var(--success)', borderColor: 'var(--success)' }}>Simular: Conectado (Open)</Button>
-          <Button type="button" variant="secondary" onClick={() => simulateState('connecting')}>Simular: Reconectando / QR</Button>
-          <Button type="button" variant="secondary" onClick={() => simulateState('close')} style={{ borderColor: 'var(--border)' }}>Simular: Desconectado</Button>
-          <Button type="button" variant="primary" onClick={() => simulateState('banned')} style={{ backgroundColor: 'var(--error)', borderColor: 'var(--error)' }}>Simular: Instância Banida</Button>
+
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { User, Mail, Lock, UserPlus, CheckCircle2, AlertCircle } from 'lucide-re
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { showToast } from '@/utils/toastHelper';
+import apiClient from '@/services/apiClient';
 import '@/styles/login.css';
 
 // Password strength calculation utility
@@ -47,7 +48,7 @@ export const Register: React.FC = () => {
   const passwordStrength = getPasswordStrength(password);
   const doPasswordsMatch = password !== '' && password === confirmPassword;
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -81,16 +82,23 @@ export const Register: React.FC = () => {
 
     setLoading(true);
 
-    setTimeout(() => {
-      try {
+    try {
+      const res = await apiClient.post('/auth/register', { name, email, password });
+      if (res.data?.success) {
         showToast.success('Administrador cadastrado com sucesso! Prossiga com o login.');
-        setLoading(false);
         navigate('/login');
-      } catch (err) {
-        setLoading(false);
-        showToast.error(err, 'Erro ao criar nova credencial administrativa.');
+      } else {
+        const msg = res.data?.error || 'Falha ao registrar.';
+        setError(msg);
+        showToast.error(msg);
       }
-    }, 1500);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao criar nova credencial administrativa.';
+      setError(errorMsg);
+      showToast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

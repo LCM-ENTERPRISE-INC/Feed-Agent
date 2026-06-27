@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, Link } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
@@ -7,6 +7,50 @@ import { Alert } from '@/components/Alert';
 export const Dashboard: React.FC = () => {
   const [alertOpen, setAlertOpen] = useState(true);
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [metrics, setMetrics] = useState({
+    totalLeads: 0,
+    disparosConcluidos: 0,
+    successRate: '0%',
+    minutasGeradas: 0,
+    queueTime: '0.0s'
+  });
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const { apiClient } = await import('@/services/apiClient');
+        
+        // Fetch KPIs
+        const kpiRes = await apiClient.get('/analytics/kpi');
+        const kpiData = kpiRes.data?.data || { totalReachedToday: 0, successRateToday: 0 };
+        
+        // Fetch Contacts total
+        const contactsRes = await apiClient.get('/contacts?page=1&limit=1');
+        const totalLeads = contactsRes.data?.data?.total || 0;
+
+        // Fetch Drafts total
+        let totalDrafts = 0;
+        try {
+          const draftsRes = await apiClient.get('/drafts');
+          totalDrafts = draftsRes.data?.data?.length || 0;
+        } catch (err) {
+          console.warn('Could not fetch drafts count', err);
+        }
+        
+        setMetrics({
+          totalLeads,
+          disparosConcluidos: kpiData.totalReachedToday,
+          successRate: `${kpiData.successRateToday}%`,
+          minutasGeradas: totalDrafts,
+          queueTime: '0.0s'
+        });
+      } catch (error) {
+        console.error('Failed to load dashboard metrics:', error);
+      }
+    };
+    
+    fetchDashboardData();
+  }, []);
 
   const triggerLoading = () => {
     setLoadingDemo(true);
@@ -26,28 +70,28 @@ export const Dashboard: React.FC = () => {
         <div className="glass-panel" style={{ padding: '24px' }}>
           <h4 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px' }}>Total de Leads</h4>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '2rem', fontWeight: 700 }}>1,248</span>
-            <Badge variant="success">+12%</Badge>
+            <span style={{ fontSize: '2rem', fontWeight: 700 }}>{metrics.totalLeads}</span>
+            <Badge variant="success">Base Real</Badge>
           </div>
         </div>
         <div className="glass-panel" style={{ padding: '24px' }}>
           <h4 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px' }}>Minutas Geradas</h4>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '2rem', fontWeight: 700 }}>156</span>
+            <span style={{ fontSize: '2rem', fontWeight: 700 }}>{metrics.minutasGeradas}</span>
             <Badge variant="primary">Ativas</Badge>
           </div>
         </div>
         <div className="glass-panel" style={{ padding: '24px' }}>
-          <h4 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px' }}>Disparos Concluídos</h4>
+          <h4 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px' }}>Disparos Concluídos (Hoje)</h4>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '2rem', fontWeight: 700 }}>4,912</span>
-            <Badge variant="success">99.8% OK</Badge>
+            <span style={{ fontSize: '2rem', fontWeight: 700 }}>{metrics.disparosConcluidos}</span>
+            <Badge variant="success">{metrics.successRate} OK</Badge>
           </div>
         </div>
         <div className="glass-panel" style={{ padding: '24px' }}>
           <h4 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px' }}>Tempo de Fila</h4>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '2rem', fontWeight: 700 }}>1.2s</span>
+            <span style={{ fontSize: '2rem', fontWeight: 700 }}>{metrics.queueTime}</span>
             <Badge variant="neutral">Baixo</Badge>
           </div>
         </div>

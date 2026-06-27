@@ -35,6 +35,7 @@ import {
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { showToast } from '@/utils/toastHelper';
+import apiClient from '@/services/apiClient';
 
 interface QueuedFile {
   id: string;
@@ -65,82 +66,9 @@ const MAX_FILE_SIZE_MB = 15;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'pdf'];
 
-const SAMPLE_RAW_TEXT_1 = `CLASSIFICADOS FOLHA DE SÃO PAULO - MAIO 2026
-IMÓVEIS - VENDA E LOCAÇÃO
-
-Apto Centro 2 dorms, ste, sacada, gar. R$ 380mil. Tratar com Mário Lopes: +55 (11) 98888-1234.
-Sobrado Mooca 3 dorms, 2 vagas, reformado. R$ 650mil. Ana Oliveira: (11) 99111-5555.
-Sala Comercial Paulista 40m², andar alto. R$ 420mil. Carlos Santos: 5511977778888.
-Galpão Barra Funda 500m², força trifásica. R$ 1.2M. Contato Beatriz Silva: +55 11 98888-9999.
-Terreno Morumbi 1000m², aclive leve. R$ 890mil. Tratar c/ Lucas Costa: (11) 98888-4321.`;
-
-const SAMPLE_RAW_TEXT_2 = `ESTADÃO IMÓVEIS - OPORTUNIDADES DO FIM DE SEMANA
-
-Casa Térrea Pinheiros, quintal grande, 3 dorms. R$ 1.1M. Falar com Fernanda Pereira: +55 (11) 98888-5678.
-Cobertura Duplex Itaim, piscina privativa. R$ 3.5M. Falar c/ Pedro Almeida: (11) 99222-3344.
-Studio Brooklin 28m², mobiliado, próx metrô. R$ 310mil. Mariana Ribeiro: +55 11 98888-8765.`;
-
-const INITIAL_GALLERY: GalleryMedia[] = [
-  {
-    id: 'med-01',
-    name: 'jornal_folha_classificados_maio.jpg',
-    sizeFormatted: '4.2 MB',
-    uploadedAt: '13/05/2026 14:22',
-    type: 'image',
-    imageUrl: 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&q=80',
-    ocrStatus: 'Concluído',
-    extractedContactsCount: 38,
-    rawExtractedText: SAMPLE_RAW_TEXT_1,
-  },
-  {
-    id: 'med-02',
-    name: 'recorte_estadao_imoveis.png',
-    sizeFormatted: '2.8 MB',
-    uploadedAt: '12/05/2026 10:15',
-    type: 'image',
-    imageUrl: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&q=80',
-    ocrStatus: 'Concluído',
-    extractedContactsCount: 19,
-    rawExtractedText: SAMPLE_RAW_TEXT_2,
-  },
-  {
-    id: 'med-03',
-    name: 'lista_participantes_congresso.pdf',
-    sizeFormatted: '1.1 MB',
-    uploadedAt: '10/05/2026 18:40',
-    type: 'pdf',
-    imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80',
-    ocrStatus: 'Concluído',
-    extractedContactsCount: 54,
-    rawExtractedText: 'CONGRESSO NACIONAL DE JORNALISMO 2026\nLista de Contatos e Credenciados:\nRoberto Gomes: +55 (11) 98888-1111\nJuliana Martins: +55 (11) 98888-2222\nGabriel Ferreira: +55 (11) 98888-3333\nLarissa Souza: +55 (11) 98888-4444',
-  },
-  {
-    id: 'med-04',
-    name: 'foto_whatsapp_contatos_balcao.jpg',
-    sizeFormatted: '3.5 MB',
-    uploadedAt: '08/05/2026 09:30',
-    type: 'image',
-    imageUrl: 'https://images.unsplash.com/photo-1526470608268-f674ce90ebd4?w=800&q=80',
-    ocrStatus: 'Concluído',
-    extractedContactsCount: 27,
-    rawExtractedText: 'Contatos Balcão WhatsApp:\nRodrigo Rodrigues: +55 (11) 98888-5555\nCamila Lopes: +55 (11) 98888-6666\nMarcelo Oliveira: +55 (11) 98888-7777',
-  },
-  {
-    id: 'med-05',
-    name: 'scan_caderno_anotacoes.jpg',
-    sizeFormatted: '5.6 MB',
-    uploadedAt: '05/05/2026 16:05',
-    type: 'image',
-    imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&q=80',
-    ocrStatus: 'Falha',
-    extractedContactsCount: 0,
-    rawExtractedText: '[Erro no mecanismo Tesseract OCR: Imagem com ruído excessivo ou resolução incompatível]',
-  },
-];
-
 export const OcrReader: React.FC = () => {
   const [queue, setQueue] = useState<QueuedFile[]>([]);
-  const [gallery, setGallery] = useState<GalleryMedia[]>(INITIAL_GALLERY);
+  const [gallery, setGallery] = useState<GalleryMedia[]>([]);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -167,9 +95,9 @@ export const OcrReader: React.FC = () => {
   const [isSplitReprocessing, setIsSplitReprocessing] = useState<boolean>(false);
 
   // Sprint 30: Llama 3 AI Prompt Customization Studio State
-  const [aiSelectedMediaId, setAiSelectedMediaId] = useState<string>(INITIAL_GALLERY[0]?.id || '');
+  const [aiSourceContent, setAiSourceContent] = useState<string>('');
   const [aiTone, setAiTone] = useState<'Formal' | 'Informativo' | 'Dinâmico' | 'Urgente'>('Informativo');
-  const [aiLength, setAiLength] = useState<'Curto' | 'Médio' | 'Longo'>('Médio');
+  const [aiLength, setAiLength] = useState<number>(500);
   const [aiCustomInstructions, setAiCustomInstructions] = useState<string>('Traduza jargões técnicos para uma linguagem comercial clara e extraia números de telefone com DDD +55.');
   const [isGeneratingAiDraft, setIsGeneratingAiDraft] = useState<boolean>(false);
   const [generatedAiDraft, setGeneratedAiDraft] = useState<string>('');
@@ -266,16 +194,23 @@ export const OcrReader: React.FC = () => {
       return;
     }
 
-    waitingFiles.forEach(fileObj => {
+    waitingFiles.forEach(async (fileObj) => {
       setQueue(prev => prev.map(q => q.id === fileObj.id ? { ...q, status: 'uploading', progress: 10 } : q));
 
-      let progress = 10;
-      const interval = window.setInterval(() => {
-        progress += Math.floor(Math.random() * 25) + 10;
-        if (progress >= 100) {
-          clearInterval(interval);
-          const generatedText = SAMPLE_RAW_TEXT_1 + `\n[ID Referência: ${fileObj.id}]`;
+      try {
+        const formData = new FormData();
+        formData.append('file', fileObj.file);
 
+        const res = await apiClient.post('/news/generate-draft', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round((progressEvent.loaded * 90) / (progressEvent.total || 100));
+            setQueue(prev => prev.map(q => q.id === fileObj.id ? { ...q, progress: percentCompleted } : q));
+          }
+        });
+
+        if (res.data?.success) {
+          const generatedText = res.data.data.article?.text || '[Texto extraído com sucesso]';
           setQueue(prev => prev.map(q => q.id === fileObj.id ? { ...q, status: 'success', progress: 100, rawExtractedText: generatedText } : q));
           
           const newMediaItem: GalleryMedia = {
@@ -286,16 +221,20 @@ export const OcrReader: React.FC = () => {
             type: fileObj.type.includes('pdf') ? 'pdf' : 'image',
             imageUrl: fileObj.previewUrl || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&q=80',
             ocrStatus: 'Concluído',
-            extractedContactsCount: Math.floor(Math.random() * 40) + 10,
+            extractedContactsCount: 0, // Real backend doesn't return count of contacts initially
             rawExtractedText: generatedText,
           };
 
           setGallery(prevG => [newMediaItem, ...prevG]);
           showToast.success(`Arquivo "${fileObj.name}" processado com sucesso pelo motor OCR!`);
         } else {
-          setQueue(prev => prev.map(q => q.id === fileObj.id ? { ...q, progress: Math.min(95, progress) } : q));
+          setQueue(prev => prev.map(q => q.id === fileObj.id ? { ...q, status: 'error', progress: 0, errorMessage: 'Erro no servidor' } : q));
+          showToast.error(`Erro no OCR do arquivo "${fileObj.name}".`);
         }
-      }, 300);
+      } catch (err) {
+        setQueue(prev => prev.map(q => q.id === fileObj.id ? { ...q, status: 'error', progress: 0, errorMessage: 'Falha na comunicação' } : q));
+        showToast.error(`Falha ao conectar com servidor OCR para "${fileObj.name}".`);
+      }
     });
   };
 
@@ -303,7 +242,6 @@ export const OcrReader: React.FC = () => {
     setGallery(prev => prev.filter(m => m.id !== id));
     if (lightboxItem?.id === id) setLightboxItem(null);
     if (splitInspectItem?.id === id) setSplitInspectItem(null);
-    if (aiSelectedMediaId === id) setAiSelectedMediaId(gallery.find(g => g.id !== id)?.id || '');
     showToast.success(`Mídia "${name}" excluída do servidor e do disco.`);
   };
 
@@ -456,7 +394,7 @@ export const OcrReader: React.FC = () => {
     setTimeout(() => { 
       setSplitProgress(100); 
       setSplitStage('Leitura concluída com sucesso');
-      const enhancedText = SAMPLE_RAW_TEXT_1 + `\n\n[Reprocessamento Avançado Concluído em ${new Date().toLocaleTimeString('pt-BR')}]`;
+      const enhancedText = `[Reprocessamento Avançado Concluído em ${new Date().toLocaleTimeString('pt-BR')}]`;
       setSplitRawText(enhancedText);
 
       if ('uploadedAt' in splitInspectItem) {
@@ -488,51 +426,65 @@ export const OcrReader: React.FC = () => {
   };
 
   // Sprint 30: Llama 3 AI Draft Generation
-  const handleGenerateAiDraft = () => {
-    const selectedMedia = gallery.find(g => g.id === aiSelectedMediaId);
-    if (!selectedMedia) {
-      showToast.error('Selecione uma mídia de origem para analisar com a IA.');
+  const handleGenerateAiDraft = async () => {
+    if (!aiSourceContent.trim()) {
+      showToast.error('Forneça a URL da notícia ou o texto base para análise com a IA.');
       return;
     }
 
     setIsGeneratingAiDraft(true);
     setGeneratedAiDraft('');
-    showToast.info('Inicializando Llama 3 (Inference Engine) com parâmetros customizados...');
+    showToast.info('Inicializando Gemini 3.5 Flash-lite (Inference Engine) com parâmetros customizados...');
 
-    const promptDetails = `[Tone: ${aiTone}] [Length: ${aiLength}]\n[Instructions: ${aiCustomInstructions}]`;
+    try {
+      const response = await apiClient.post('/news/generate-ai-draft', {
+        sourceContent: aiSourceContent,
+        tone: aiTone,
+        length: aiLength,
+        instructions: aiCustomInstructions
+      }, {
+        timeout: 180000 // 3 minutes timeout for LLM inference
+      });
 
-    setTimeout(() => {
-      const generatedResult = `📢 MINUTA DE NOTÍCIA E CONTATOS (GERADA POR IA - LLAMA 3)
+      if (response.data?.success) {
+        const { article } = response.data.data;
+        
+        // Construct visual representation
+        const generatedResult = `📢 MINUTA DE NOTÍCIA E CONTATOS (GERADA POR IA - GEMINI)
 ======================================================
-Parâmetros de Geração: ${promptDetails}
+Parâmetros de Geração: [Tone: ${aiTone}] [Length: ${aiLength} caracteres]
 Data de Análise: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
 
-📌 RESUMO INTELIGENTE (${aiLength}):
-Identificamos excelentes oportunidades no caderno de imóveis e classificados. O conteúdo foi formatado em tom ${aiTone.toLowerCase()} para rápida assimilação comercial pela equipe de atendimento.
+📌 TÍTULO INTELIGENTE:
+${article.titulo}
 
-📞 CONTATOS VALIDADOS COM DDD (+55):
-• Mário Lopes: +55 (11) 98888-1234 (Apto Centro, R$ 380mil)
-• Ana Oliveira: +55 (11) 99111-5555 (Sobrado Mooca, R$ 650mil)
-• Carlos Santos: +55 (11) 97777-8888 (Sala Comercial Paulista)
-• Beatriz Silva: +55 (11) 98888-9999 (Galpão Barra Funda)
-• Lucas Costa: +55 (11) 98888-4321 (Terreno Morumbi)
+📌 RESUMO INTELIGENTE (Max ${aiLength} caracteres):
+${article.resumo}
+
+🔗 FONTE UTILIZADA:
+${article.fonte}
 
 🚀 CONCLUSÃO & AÇÃO SUGERIDA:
-Todos os 5 contatos foram higienizados conforme suas instruções e estão prontos para envio em massa no WhatsApp Hub.`;
+A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanban (Minutas Studio).`;
 
-      let currentLength = 0;
-      const typingInterval = window.setInterval(() => {
-        currentLength += 35;
-        if (currentLength >= generatedResult.length) {
-          clearInterval(typingInterval);
-          setGeneratedAiDraft(generatedResult);
-          setIsGeneratingAiDraft(false);
-          showToast.success('Minuta gerada com sucesso pelo modelo Llama 3!');
-        } else {
-          setGeneratedAiDraft(generatedResult.substring(0, currentLength));
-        }
-      }, 50);
-    }, 1200);
+        let currentLength = 0;
+        const typingInterval = window.setInterval(() => {
+          currentLength += 35;
+          if (currentLength >= generatedResult.length) {
+            clearInterval(typingInterval);
+            setGeneratedAiDraft(generatedResult);
+            setIsGeneratingAiDraft(false);
+            showToast.success('Minuta gerada com sucesso e salva na aba Minutas (Pendente)!');
+          } else {
+            setGeneratedAiDraft(generatedResult.substring(0, currentLength));
+          }
+        }, 30);
+      }
+    } catch (error: any) {
+      console.error('Erro ao gerar draft:', error);
+      setIsGeneratingAiDraft(false);
+      showToast.error(error.response?.data?.message || 'Falha na comunicação com o LLM Local.');
+    }
   };
 
   const handleCopyAiDraft = () => {
@@ -782,7 +734,7 @@ Todos os 5 contatos foram higienizados conforme suas instruções e estão pront
             <FileUp size={32} style={{ color: 'var(--primary)' }} />
             <span>Digitalização de Jornais e Recortes (OCR)</span>
           </h1>
-          <p style={{ color: 'var(--text-muted)' }}>Arraste páginas de jornal, aplique ajustes no Canvas, inspecione no Split-Screen e resuma com Llama 3</p>
+          <p style={{ color: 'var(--text-muted)' }}>Arraste páginas, aplique ajustes, inspecione o OCR e forneça as informações para o Gemini 3.5 Flash-lite gerar a minuta de notícia</p>
         </div>
 
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -797,19 +749,19 @@ Todos os 5 contatos foram higienizados conforme suas instruções e estão pront
         </div>
       </div>
 
-      {/* Sprint 30: Llama 3 AI Prompt Customization Studio Panel */}
+      {/* Sprint 30: AI Prompt Customization Studio Panel */}
       <div className="glass-panel" style={{ padding: '40px', display: 'flex', flexDirection: 'column', gap: '32px', borderColor: 'rgba(168, 85, 247, 0.4)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c084fc' }}>
-              <Bot size={28} />
+              <Bot size={20} style={{ color: '#a855f7' }} />
             </div>
             <div>
               <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>Estúdio de Inteligência Artificial & Prompt (Llama 3)</span>
-                <Badge variant="primary">Ollama Local AI</Badge>
+                <span>Estúdio de Inteligência Artificial & Prompt (Gemini 3.5 Flash-lite)</span>
+                <Badge variant="primary">GOOGLE AI</Badge>
               </h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>Selecione o tom de voz, tamanho e forneça instruções customizadas para resumir recortes e formatar contatos</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>Forneça as fontes e informações para o Gemini 3.5 Flash-lite gerar a minuta de notícia. Após sua aprovação, ela se tornará a notícia a ser enviada aos contatos.</p>
             </div>
           </div>
 
@@ -833,24 +785,20 @@ Todos os 5 contatos foram higienizados conforme suas instruções e estão pront
           {/* Media Selection for AI Analysis */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FileCode2 size={16} style={{ color: '#c084fc' }} /> <span>Mídia de Origem (Texto OCR)</span>
+              <FileCode2 size={16} style={{ color: '#c084fc' }} /> <span>Fontes de Notícias e Informações (URL ou Texto)</span>
             </label>
-            <select
-              value={aiSelectedMediaId}
-              onChange={e => setAiSelectedMediaId(e.target.value)}
+            <input
+              type="text"
+              value={aiSourceContent}
+              onChange={e => setAiSourceContent(e.target.value)}
               disabled={isGeneratingAiDraft}
+              placeholder="Cole a URL da notícia ou digite o texto base..."
               style={{
                 width: '100%', height: '44px', padding: '0 16px', borderRadius: '8px',
                 backgroundColor: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border)', color: 'white',
-                fontSize: '0.9rem', outline: 'none', cursor: 'pointer'
+                fontSize: '0.9rem', outline: 'none'
               }}
-            >
-              {gallery.map(g => (
-                <option key={g.id} value={g.id}>
-                  {g.name} ({g.extractedContactsCount} contatos extraídos)
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* Tone Selection */}
@@ -875,25 +823,23 @@ Todos os 5 contatos foram higienizados conforme suas instruções e estão pront
             </select>
           </div>
 
-          {/* Output Size */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <AlignLeft size={16} style={{ color: '#c084fc' }} /> <span>Tamanho do Resumo</span>
+              <AlignLeft size={16} style={{ color: '#c084fc' }} /> <span>Tamanho Máximo do Resumo (Caracteres)</span>
             </label>
-            <select
+            <input
+              type="number"
               value={aiLength}
-              onChange={e => setAiLength(e.target.value as 'Curto' | 'Médio' | 'Longo')}
+              onChange={e => setAiLength(Number(e.target.value))}
               disabled={isGeneratingAiDraft}
+              min={50}
+              max={5000}
               style={{
                 width: '100%', height: '44px', padding: '0 16px', borderRadius: '8px',
                 backgroundColor: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border)', color: 'white',
-                fontSize: '0.9rem', outline: 'none', cursor: 'pointer'
+                fontSize: '0.9rem', outline: 'none'
               }}
-            >
-              <option value="Curto">Curto (Apenas Tópicos Chave)</option>
-              <option value="Médio">Médio (Resumo e Contatos Principais)</option>
-              <option value="Longo">Longo (Análise Completa e Transcrição Integral)</option>
-            </select>
+            />
           </div>
         </div>
 
@@ -925,7 +871,7 @@ Todos os 5 contatos foram higienizados conforme suas instruções e estão pront
             isLoading={isGeneratingAiDraft}
             style={{ height: '48px', padding: '0 32px', fontSize: '1rem', backgroundColor: '#a855f7', borderColor: '#a855f7' }}
           >
-            {isGeneratingAiDraft ? 'Processando Inference no Llama 3...' : 'Gerar Minuta de Notícia com Llama 3'}
+            {isGeneratingAiDraft ? 'Processando Inference no Gemini...' : 'Gerar Minuta de Notícia com Gemini'}
           </Button>
         </div>
 
@@ -935,7 +881,7 @@ Todos os 5 contatos foram higienizados conforme suas instruções e estão pront
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Bot size={18} style={{ color: '#c084fc' }} />
-                <span>Minuta e Resumo Gerados (Llama 3)</span>
+                <span>Minuta e Resumo Gerados (Gemini 3.5 Flash-lite)</span>
               </span>
               <Button type="button" variant="secondary" icon={Copy} onClick={handleCopyAiDraft} style={{ height: '32px', fontSize: '0.8rem' }}>
                 Copiar Minuta de Notícia

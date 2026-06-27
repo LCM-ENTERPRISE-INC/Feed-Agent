@@ -38,6 +38,7 @@ import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { Input } from '@/components/Input';
 import { showToast } from '@/utils/toastHelper';
+import apiClient from '@/services/apiClient';
 
 export type DraftStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 export type DraftPriority = 'Baixa' | 'Média' | 'Alta' | 'Urgente';
@@ -58,149 +59,43 @@ export interface DraftItem {
   rejectionReason?: string;
 }
 
-const INITIAL_DRAFTS: DraftItem[] = [
-  {
-    id: 'draft-101',
-    title: 'Alta dos combustíveis impacta mercado imobiliário',
-    summary: 'Aumento de 5% no diesel e gasolina eleva custos de frete e materiais de construção em São Paulo.',
-    rawOcrSourceText: `JORNAL FOLHA DE SÃO PAULO - CADERNO ECONOMIA
-Reajuste nos combustíveis atinge setor produtivo.
-A Petrobras anunciou nesta segunda-feira um aumento de 5% no diesel e na gasolina em todo o estado de São Paulo. Representantes do sindicato da construção civil alertam que o repasse do frete elevará o índice INCC nos próximos 30 dias. Recomendação aos corretores é focar no fechamento de propostas de unidades prontas.`,
-    metadataJson: JSON.stringify({
-      keywords: ["combustivel", "economia", "imobiliario", "incc", "frete"],
-      relevance: "high",
-      sentiment: "warning",
-      targetAudience: ["corretores", "gerentes", "diretores"],
-      aiModelVersion: "Llama-3-70b-Instruct",
-      extractedEntities: { percentage: "5%", location: "São Paulo", timeSpan: "30 dias" }
-    }, null, 2),
-    content: `📢 ALERTA DE MERCADO: Alta dos Combustíveis! ⛽
-
-Ocorreu um aumento de 5% no diesel e gasolina nesta semana. De acordo com analistas do setor, este reajuste impactará diretamente os custos de frete e distribuição de insumos da construção civil.
-
-🏢 Recomendações para Corretores:
-👉 Antecipar fechamento de propostas em andamento
-👉 Revisar tabelas de reajuste do INCC
-👉 Focar em imóveis prontos ou em fase final
-
-📌 Dúvidas? Consulte nossa diretoria comercial.`,
-    status: 'PENDING',
-    priority: 'Alta',
-    source: 'Folha de S. Paulo',
-    createdAt: '14/05/2026 10:15',
-    category: 'Imobiliário',
-    attachmentUrl: 'https://images.unsplash.com/photo-1542000651-78c772e008a0?w=600&q=80',
-  },
-  {
-    id: 'draft-102',
-    title: 'Alerta de Pauta Urgente - Eleições Sindicais',
-    summary: 'Calendário confirmado para as eleições sindicais do setor de transportes no fim de maio.',
-    rawOcrSourceText: `BOLETIM SINDICAL DOS TRANSPORTES DE SP
-Edital de Convocação de Eleições 2026.
-Ficam convocados todos os filiados para a votação de renovação da mesa diretora. O pleito ocorrerá nos dias 28 e 29 de Maio, nas garagens das 05h às 19h e na sede central das 08h às 17h. Obrigatório apresentar documento com foto. Nota do conselho: o quórum mínimo é de 50% dos ativos.`,
-    metadataJson: JSON.stringify({
-      keywords: ["eleicoes", "sindicato", "transportes", "votacao", "filiados"],
-      relevance: "urgent",
-      sentiment: "neutral",
-      targetAudience: ["associados", "motoristas"],
-      aiModelVersion: "Llama-3-70b-Instruct"
-    }, null, 2),
-    content: `🚨 ATENÇÃO ASSOCIADOS: Eleições Sindicais 2026 🗳️
-
-Confirmamos a data oficial das eleições para a nova diretoria do setor de transportes. A votação ocorrerá presencialmente e por urnas itinerantes nos dias 28 e 29 de Maio.
-
-📍 Locais de Votação:
-• Sede Central (08h às 17h)
-• Garagens Regionais (05h às 19h)
-
-⚠️ Obrigatório apresentar documento oficial com foto e carteira social ativa. Contamos com sua participação!`,
-    status: 'PENDING',
-    priority: 'Urgente',
-    source: 'IA Generativa',
-    createdAt: '14/05/2026 09:40',
-    category: 'Sindicato',
-    attachmentUrl: 'https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=600&q=80',
-  },
-  {
-    id: 'draft-103',
-    title: 'Cobrança Mensal Contribuintes - Maio/26',
-    summary: 'Lembrete de vencimento da contribuição associativa mensal para evitar acréscimo de juros e multas.',
-    rawOcrSourceText: `COMUNICADO DO DEPARTAMENTO FINANCEIRO
-Ref: Vencimento Contribuição Maio/2026.
-Informamos que a mensalidade associativa vence rigorosamente no dia 20 de maio. Pagamentos após a data estarão sujeitos a multa de 2% e juros moratórios. A emissão de segunda via pode ser feita no site ou pelo WhatsApp.`,
-    metadataJson: JSON.stringify({
-      keywords: ["cobranca", "mensalidade", "vencimento", "financeiro", "boleto"],
-      relevance: "medium",
-      sentiment: "formal",
-      targetAudience: ["todos_filiados"],
-      aiModelVersion: "Rule-Based-Engine"
-    }, null, 2),
-    content: `💰 Prezado(a) filiado(a),
-
-Lembramos que o vencimento da contribuição associativa de Maio ocorrerá no próximo dia 20. Evite multas e juros mantendo sua regularidade.
-
-✅ Acesse seu boleto atualizado diretamente no portal do associado ou solicite segunda via pelo nosso atendimento automatizado.`,
-    status: 'APPROVED',
-    priority: 'Média',
-    source: 'Manual / Financeiro',
-    createdAt: '12/05/2026 16:20',
-    category: 'Financeiro',
-  },
-  {
-    id: 'draft-104',
-    title: 'Convocação Assembleia Geral Extraordinária',
-    summary: 'Pauta para deliberação da nova convenção coletiva de trabalho e reajuste salarial.',
-    rawOcrSourceText: `DIRETORIA EXECUTIVA - EDITAL EXTRAORDINÁRIO
-Convocação para Assembleia Geral no dia 25 de Maio às 19:00 horas no auditório principal. Pauta: 1. Reajuste salarial; 2. Banco de horas; 3. Assuntos gerais.`,
-    content: `👔 CONVOCAÇÃO ASSEMBLEIA GERAL EXTRAORDINÁRIA
-
-Convocamos todos os associados para a Assembleia Geral Extraordinária a realizar-se no auditório principal dia 25/05 às 19h.
-
-Pauta do Dia:
-1️⃣ Análise da proposta patronal de reajuste salarial
-2️⃣ Deliberação sobre o banco de horas
-3️⃣ Assuntos gerais da categoria`,
-    status: 'APPROVED',
-    priority: 'Alta',
-    source: 'Manual / Diretoria',
-    createdAt: '10/05/2026 11:10',
-    category: 'Institucional',
-  },
-  {
-    id: 'draft-105',
-    title: 'Promoção Convênio Odontológico OdontoMax',
-    summary: 'Campanha de adesão com isenção total de carência e descontos exclusivos para dependentes diretos.',
-    content: `🦷 Sorriso Novo com OdontoMax! ✨
-
-Aproveite carência zero no plano odontológico familiar aderindo até esta sexta-feira. Tabela com 30% de desconto para dependentes e cobertura completa de próteses e ortodontia.`,
-    status: 'REJECTED',
-    priority: 'Baixa',
-    source: 'Importação CSV',
-    createdAt: '08/05/2026 14:05',
-    category: 'Benefícios',
-    rejectionReason: 'Tabela de preços desatualizada. Falta incluir o aditivo do plano premium.',
-  },
-  {
-    id: 'draft-106',
-    title: 'Nota de Falecimento e Pesar - Ary Barbosa',
-    summary: 'Comunicado institucional sobre o falecimento do conselheiro emérito da fundação.',
-    content: `🖤 Comunicamos com imenso pesar o falecimento do nosso querido conselheiro emérito Sr. Ary Barbosa, ocorrido nesta madrugada.
-
-O velório será restrito aos familiares no cemitério Parque das Flores a partir das 14h. Aos amigos e colegas, agradecemos as manifestações de carinho.`,
-    status: 'CANCELLED',
-    priority: 'Média',
-    source: 'WhatsApp Hub',
-    createdAt: '05/05/2026 18:30',
-    category: 'Comunicados',
-  },
-];
-
 const WHATSAPP_EMOJIS = ['📢', '🚨', '🔥', '📌', '💰', '🏢', '📅', '✅', '⚠️', '👉', '📍', '🗳️', '⛽', '🤝', '📈', '✨', '⭐', '❤️'];
 
 export const DraftsStudio: React.FC = () => {
-  const [drafts, setDrafts] = useState<DraftItem[]>(INITIAL_DRAFTS);
+  const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
+
+
+  React.useEffect(() => {
+    const fetchDrafts = async () => {
+      try {
+        const res = await apiClient.get('/drafts');
+        if (res.data?.success) {
+          const mappedDrafts: DraftItem[] = res.data.data.map((d: any) => {
+            const article = d.generatedContent || d.articleJson || {};
+            return {
+              id: String(d.id),
+              title: article.titulo || article.title || 'Minuta sem título',
+              summary: article.resumo || article.summary || article.text?.substring(0, 50) || '',
+              content: article.resumo || article.text || '',
+              rawOcrSourceText: d.originalText || '',
+              status: d.status,
+              priority: 'Média',
+              source: article.fonte || 'Sistema',
+              createdAt: new Date(d.createdAt).toLocaleString('pt-BR'),
+              category: 'Geral',
+              attachmentUrl: d.imagePath ? `/api/news/image/${d.id}` : undefined,
+            };
+          });
+          setDrafts(mappedDrafts);
+        }
+      } catch (error) {
+        showToast.error('Erro ao carregar minutas.');
+      }
+    };
+    fetchDrafts();
+  }, []);
 
   // Modal Editor State
   const [editingDraft, setEditingDraft] = useState<DraftItem | null>(null);
@@ -338,14 +233,19 @@ export const DraftsStudio: React.FC = () => {
     setIsCreatingNew(false);
   };
 
-  const handleDeleteDraft = (id: string, title: string) => {
-    setDrafts(prev => prev.filter(d => d.id !== id));
-    if (editingDraft?.id === id) setEditingDraft(null);
-    if (auditDraft?.id === id) setAuditDraft(null);
-    if (jsonDraft?.id === id) setJsonDraft(null);
-    if (approveDraftCandidate?.id === id) setApproveDraftCandidate(null);
-    if (rejectDraftCandidate?.id === id) setRejectDraftCandidate(null);
-    showToast.success(`Minuta "${title}" deletada com sucesso.`);
+  const handleDeleteDraft = async (id: string, title: string) => {
+    try {
+      await apiClient.delete(`/drafts/${id}`);
+      setDrafts(prev => prev.filter(d => d.id !== id));
+      if (editingDraft?.id === id) setEditingDraft(null);
+      if (auditDraft?.id === id) setAuditDraft(null);
+      if (jsonDraft?.id === id) setJsonDraft(null);
+      if (approveDraftCandidate?.id === id) setApproveDraftCandidate(null);
+      if (rejectDraftCandidate?.id === id) setRejectDraftCandidate(null);
+      showToast.success(`Minuta "${title}" deletada com sucesso.`);
+    } catch (err) {
+      showToast.error(`Erro ao deletar minuta: ${(err as Error).message}`);
+    }
   };
 
   const handleQuickStatusChange = (id: string, newStatus: DraftStatus) => {
@@ -367,18 +267,25 @@ export const DraftsStudio: React.FC = () => {
     setIsAllocatingBullMq(false);
   };
 
-  const handleConfirmBullMqBroadcast = () => {
+  const handleConfirmBullMqBroadcast = async () => {
     if (!approveDraftCandidate) return;
     setIsAllocatingBullMq(true);
-    showToast.info('Conectando ao cluster Redis e instanciando 125 jobs na fila do BullMQ...');
-
-    setTimeout(() => {
+    
+    try {
+      const res = await apiClient.post(`/drafts/${approveDraftCandidate.id}/approve`, { includeImage: false });
+      if (res.data?.success) {
+        showToast.success(`🚀 Sucesso! A minuta "${approveDraftCandidate.title}" foi aprovada e enfileirada.`);
+        setDrafts(prev => prev.map(d => d.id === approveDraftCandidate.id ? { ...d, status: 'APPROVED' } : d));
+      } else {
+        showToast.error('Falha ao aprovar minuta.');
+      }
+    } catch (err) {
+      showToast.error('Erro de conexão ao aprovar a minuta.');
+    } finally {
       setIsAllocatingBullMq(false);
-      showToast.success(`🚀 Sucesso! A minuta "${approveDraftCandidate.title}" foi aprovada e enfileirada no BullMQ para disparo em massa.`);
-      setDrafts(prev => prev.map(d => d.id === approveDraftCandidate.id ? { ...d, status: 'APPROVED' } : d));
       setApproveDraftCandidate(null);
       setEditingDraft(null);
-    }, 1500);
+    }
   };
 
   // Sprint 35: Centralized Rejection Justification Hub
@@ -388,22 +295,31 @@ export const DraftsStudio: React.FC = () => {
     setRejectionReasonText(draft.rejectionReason || '');
   };
 
-  const handleConfirmRejectionJustification = () => {
+  const handleConfirmRejectionJustification = async () => {
     if (!rejectDraftCandidate) return;
     if (!rejectionReasonText.trim()) {
       showToast.error('Por favor, informe a justificativa textual para a rejeição.');
       return;
     }
 
-    setDrafts(prev => prev.map(d => d.id === rejectDraftCandidate.id ? {
-      ...d,
-      status: 'REJECTED',
-      rejectionReason: rejectionReasonText.trim()
-    } : d));
-
-    showToast.success(`Minuta "${rejectDraftCandidate.title}" devolvida e rejeitada com justificativa.`);
-    setRejectDraftCandidate(null);
-    setEditingDraft(null);
+    try {
+      const res = await apiClient.post(`/drafts/${rejectDraftCandidate.id}/reject`, { reason: rejectionReasonText.trim() });
+      if (res.data?.success) {
+        setDrafts(prev => prev.map(d => d.id === rejectDraftCandidate.id ? {
+          ...d,
+          status: 'REJECTED',
+          rejectionReason: rejectionReasonText.trim()
+        } : d));
+        showToast.success(`Minuta "${rejectDraftCandidate.title}" devolvida e rejeitada com justificativa.`);
+      } else {
+        showToast.error('Falha ao rejeitar a minuta.');
+      }
+    } catch (err) {
+      showToast.error('Erro de conexão ao rejeitar a minuta.');
+    } finally {
+      setRejectDraftCandidate(null);
+      setEditingDraft(null);
+    }
   };
 
   // Fact-Checking Audit Handlers

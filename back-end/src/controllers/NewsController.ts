@@ -8,6 +8,7 @@ import draftService from '../services/DraftService';
 import { Job } from 'bullmq';
 import logger from '../utils/logger';
 import fs from 'fs';
+import urlScraperService from '../services/UrlScraperService';
 
 export class NewsController {
   /**
@@ -146,6 +147,60 @@ export class NewsController {
       if (req.file?.path && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/news/generate-ai-draft
+   * Endpoint for generating a draft from a URL or raw text input via Llama 3
+   */
+  async generateAiDraft(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      const { sourceContent, tone, length, instructions } = req.body;
+
+      if (!sourceContent || typeof sourceContent !== 'string') {
+        throw new AppError('sourceContent is required.', 400);
+      }
+
+      let textToProcess = sourceContent;
+      let sourceLabel = 'Texto Fornecido Pelo Usuário';
+
+      // Verify if sourceContent is a URL
+      const isUrl = /^https?:\/\//i.test(sourceContent.trim());
+      if (isUrl) {
+        textToProcess = await urlScraperService.extractTextFromUrl(sourceContent.trim());
+        sourceLabel = sourceContent.trim();
+      }
+
+      // Generate Draft
+      const articleJson = await newsGeneratorService.generateCustomDraft(
+        textToProcess,
+        tone || 'Informativo',
+        length || 500,
+        instructions || '',
+        sourceLabel
+      );
+
+      // Save to database
+      const draft = await draftService.createDraft(
+        req.user!.userId,
+        textToProcess,
+        articleJson
+      );
+
+      const processingTimeMs = Date.now() - startTime;
+
+      const payload = {
+        draftId: draft.id,
+        processingTimeMs,
+        article: articleJson,
+      };
+
+      ApiResponse.success(res, payload, 'AI Draft generated successfully.', 200);
+    } catch (err) {
       next(err);
     }
   }

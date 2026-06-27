@@ -52,20 +52,7 @@ app.use(helmet());
 app.use(globalLimiter);
 
 // CORS — only allow the Vue 3 dashboard origin
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(',');
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS policy: Origin '${origin}' is not allowed.`));
-      }
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-);
+app.use(cors());
 
 // Body parsers
 app.use(express.json({ limit: '10mb' }));

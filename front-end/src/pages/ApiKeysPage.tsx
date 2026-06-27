@@ -28,44 +28,7 @@ interface ApiKeyItem {
   status: 'ACTIVE' | 'REVOKED';
 }
 
-const INITIAL_KEYS: ApiKeyItem[] = [
-  {
-    id: 'key-101',
-    name: 'ERP Financeiro Integrator (SAP / Totvs)',
-    token: 'feed_prod_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkVSUCBJbnRlZ3JhdG9yIiwiaWF0IjoxNzEyODgwMDAwfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
-    scopes: ['READ_CONTACTS', 'WRITE_CONTACTS'],
-    createdAt: '10/01/2026',
-    usageCount: 1425,
-    status: 'ACTIVE'
-  },
-  {
-    id: 'key-102',
-    name: 'CRM HubSpot Connector Hub',
-    token: 'feed_prod_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjcm1faHViIiwibmFtZSI6Ikh1YlNwb3QgQ29ubmVjdG9yIiwiYWRtaW4iOnRydWV9.TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ',
-    scopes: ['READ_DRAFTS', 'WRITE_DRAFTS', 'BROADCAST_TRIGGER'],
-    createdAt: '15/02/2026',
-    usageCount: 890,
-    status: 'ACTIVE'
-  },
-  {
-    id: 'key-103',
-    name: 'Zapier Automation Trigger Webhook',
-    token: 'feed_prod_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ6YXBpZXJfYXV0byIsImlhdCI6MTcxNTUwMDAwMH0.B91e05eefc304cc8b04b9302ddc6f66fa8c02053c276',
-    scopes: ['BROADCAST_TRIGGER'],
-    createdAt: '28/04/2026',
-    usageCount: 42,
-    status: 'ACTIVE'
-  },
-  {
-    id: 'key-104',
-    name: 'Legacy SMS Gateway Connector (Depreciado)',
-    token: 'feed_legacy_eyJhbGciOiJIUzI1NiJ9.ZXhwb3J0ZWQ=...REVOKED',
-    scopes: ['READ_CONTACTS'],
-    createdAt: '01/11/2025',
-    usageCount: 3840,
-    status: 'REVOKED'
-  }
-];
+const INITIAL_KEYS: ApiKeyItem[] = [];
 
 export const ApiKeysPage: React.FC = () => {
   const [keys, setKeys] = useState<ApiKeyItem[]>(INITIAL_KEYS);
