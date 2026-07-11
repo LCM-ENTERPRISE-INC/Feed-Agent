@@ -58,6 +58,36 @@ export class DraftController {
     }
   }
   /**
+   * POST /api/drafts
+   * Manually creates a new draft from the studio.
+   */
+  async createDraft(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const { title, summary, content, source, category, priority, status, imagePath } = req.body;
+
+      if (!title || !content) {
+        throw new AppError('Title and content are required.', 400);
+      }
+
+      const generatedContent = {
+        titulo: title,
+        resumo: summary || '',
+        fonte: source || 'Estúdio Kanban Manual'
+      };
+
+      const originalText = content;
+
+      const draft = await draftService.createDraft(userId, originalText, generatedContent, imagePath);
+
+      // Map back to frontend expected fields if needed, but the frontend reloads or maps it
+      ApiResponse.success(res, draft, 'Draft created successfully.', 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * PUT /api/drafts/:id
    * Updates the generated content (NewsArticleJSON) of a specific draft.
    */

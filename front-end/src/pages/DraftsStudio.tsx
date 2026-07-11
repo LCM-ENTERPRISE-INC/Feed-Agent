@@ -190,7 +190,7 @@ export const DraftsStudio: React.FC = () => {
     showToast.success('Anexo de mídia vinculado com sucesso!');
   };
 
-  const handleSaveDraft = (e: React.FormEvent) => {
+  const handleSaveDraft = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim() || !formContent.trim()) {
       showToast.error('Preencha o título e o corpo da mensagem.');
@@ -198,35 +198,66 @@ export const DraftsStudio: React.FC = () => {
     }
 
     if (isCreatingNew) {
-      const newDraft: DraftItem = {
-        id: `draft-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        title: formTitle,
-        summary: formSummary || 'Resumo gerado automaticamente para a pauta.',
-        content: formContent,
-        rawOcrSourceText: 'Texto inserido via formulário manual de redação do Feed-Agent.',
-        metadataJson: JSON.stringify({ keywords: ["geral", "manual"], relevance: "normal" }, null, 2),
-        status: formStatus,
-        priority: formPriority,
-        source: formSource || 'Estúdio Kanban Manual',
-        createdAt: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        category: formCategory,
-        attachmentUrl: formAttachment || undefined,
-      };
-      setDrafts(prev => [newDraft, ...prev]);
-      showToast.success('Nova minuta salva com sucesso no sistema!');
+      try {
+        const payload = {
+          title: formTitle,
+          summary: formSummary,
+          content: formContent,
+          status: formStatus,
+          priority: formPriority,
+          source: formSource || 'Estúdio Kanban Manual',
+          category: formCategory,
+          imagePath: formAttachment || undefined,
+        };
+
+        const res = await apiClient.post('/drafts', payload);
+        if (res.data?.success) {
+          const d = res.data.data;
+          const article = d.generatedContent || {};
+          const newDraft: DraftItem = {
+            id: String(d.id),
+            title: article.titulo || formTitle,
+            summary: article.resumo || formSummary,
+            content: article.resumo || formContent,
+            rawOcrSourceText: d.originalText || '',
+            status: d.status,
+            priority: formPriority,
+            source: article.fonte || formSource,
+            createdAt: new Date(d.createdAt).toLocaleString('pt-BR'),
+            category: formCategory,
+            attachmentUrl: d.imagePath ? `/api/news/image/${d.id}` : undefined,
+          };
+          setDrafts(prev => [newDraft, ...prev]);
+          showToast.success('Nova minuta salva com sucesso no sistema!');
+        }
+      } catch (err) {
+        showToast.error('Erro ao salvar a minuta no banco de dados.');
+      }
     } else if (editingDraft) {
-      setDrafts(prev => prev.map(d => d.id === editingDraft.id ? {
-        ...d,
-        title: formTitle,
-        summary: formSummary,
-        source: formSource,
-        content: formContent,
-        status: formStatus,
-        priority: formPriority,
-        category: formCategory,
-        attachmentUrl: formAttachment || undefined,
-      } : d));
-      showToast.success('Minuta atualizada com sucesso!');
+      try {
+        const payload = {
+          titulo: formTitle,
+          resumo: formSummary,
+          fonte: formSource,
+        };
+        const res = await apiClient.put(`/drafts/${editingDraft.id}`, payload);
+        if (res.data?.success) {
+          setDrafts(prev => prev.map(d => d.id === editingDraft.id ? {
+            ...d,
+            title: formTitle,
+            summary: formSummary,
+            source: formSource,
+            content: formContent,
+            status: formStatus,
+            priority: formPriority,
+            category: formCategory,
+            attachmentUrl: formAttachment || undefined,
+          } : d));
+          showToast.success('Minuta atualizada com sucesso!');
+        }
+      } catch (err) {
+        showToast.error('Erro ao atualizar a minuta.');
+      }
     }
 
     setEditingDraft(null);

@@ -35,6 +35,48 @@ router.get('/', draftController.getDrafts.bind(draftController));
 
 /**
  * @openapi
+ * /api/drafts:
+ *   post:
+ *     summary: Create a new draft
+ *     description: Manually create a news draft.
+ *     tags: [Drafts]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               summary:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *               source:
+ *                 type: string
+ *               category:
+ *                 type: string
+ *               priority:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *               imagePath:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Draft created successfully.
+ *       400:
+ *         description: Invalid input.
+ *       401:
+ *         description: Unauthorized.
+ */
+router.post('/', draftController.createDraft.bind(draftController));
+
+/**
+ * @openapi
  * /api/drafts/{id}:
  *   get:
  *     summary: Get draft details
