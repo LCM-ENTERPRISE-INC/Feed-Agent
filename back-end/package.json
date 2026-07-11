@@ -10,7 +10,8 @@
     "test": "jest --runInBand --forceExit",
     "test:coverage": "jest --coverage --runInBand --forceExit",
     "lint": "eslint \"src/**/*.ts\"",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "download-model": "node-llama-cpp download --dir ./models \"hf:QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/Meta-Llama-3-8B-Instruct.Q4_K_M.gguf\""
   },
   "keywords": [],
   "author": "",
@@ -34,6 +35,7 @@
     "mongoose": "^9.6.1",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
+    "node-llama-cpp": "^3.19.0",
     "pdf-parse": "^2.4.5",
     "qrcode": "^1.5.4",
     "sanitize-html": "^2.17.3",

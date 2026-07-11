@@ -43,6 +43,7 @@ services:
     volumes:
       - wa_sessions:/app/sessions
       - wa_uploads:/app/uploads
+      - ./back-end/models:/app/models
       - app_logs:/app/logs
     logging:
       driver: "json-file"

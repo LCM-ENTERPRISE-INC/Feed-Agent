@@ -1,17 +1,9 @@
-import axios, { AxiosInstance } from 'axios';
+import path from 'path';
+import fs from 'fs';
+import { getLlama, LlamaChatSession } from 'node-llama-cpp';
 import logger from '../utils/logger';
 import { AppError } from '../utils/AppError';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Configuration
-// ─────────────────────────────────────────────────────────────────────────────
-
-const OLLAMA_BASE_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const DEFAULT_MODEL = process.env.LLAMA_MODEL || 'llama3';
-
-/**
- * Interface representing the inference parameters for the Llama model.
- */
 export interface LlamaInferenceParams {
   temperature?: number;
   top_p?: number;
@@ -19,91 +11,94 @@ export interface LlamaInferenceParams {
   format?: 'json';
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Service Definition
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Service responsible for communicating with the local Ollama instance (or external API)
- * to run inference on the Llama models.
- */
 export class LlamaService {
-  private client: AxiosInstance;
+  private llama: any;
+  private model: any;
+  private context: any;
+  private isInitialized = false;
+  private initPromise: Promise<void> | null = null;
+  private grammarJson: any = null;
 
   constructor() {
-    this.client = axios.create({
-      baseURL: OLLAMA_BASE_URL,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      // Set a generous timeout since LLM inference can take several seconds
-      timeout: 120_000, 
-    });
+    const modelDir = process.env.MODELS_DIR || path.join(process.cwd(), 'models');
+    const modelName = process.env.LLAMA_MODEL_FILE || 'llama3-8b.gguf';
+    const modelPath = path.join(modelDir, modelName);
 
-    logger.info(`[llama-service]: Initialized with base URL ${OLLAMA_BASE_URL}`);
+    // Initialize async in constructor without blocking
+    this.initPromise = this.initialize(modelPath).catch(err => {
+      logger.error(`[llama-service]: Failed to initialize native model: ${err.message}`);
+    });
   }
 
-  /**
-   * Generates a completion from the Llama model based on a prompt.
-   *
-   * @param prompt - The instruction/input text for the model.
-   * @param systemPrompt - Optional system instructions (e.g. persona definition).
-   * @param params - Optional inference parameters (temperature, max_tokens, etc).
-   * @returns The generated response string.
-   */
-  async generateCompletion(prompt: string, systemPrompt?: string, params?: LlamaInferenceParams): Promise<string> {
-    try {
-      logger.info(`[llama-service]: Sending prompt to ${DEFAULT_MODEL} model...`);
+  private async initialize(modelPath: string) {
+    logger.info(`[llama-service]: Initializing native node-llama-cpp using model: ${modelPath}`);
 
-      const payload: any = {
-        model: DEFAULT_MODEL,
-        prompt: prompt,
-        stream: false, // We want the full response at once for now
-        options: {
-          temperature: params?.temperature ?? 0.3, // Lower temperature for more deterministic/factual outputs
-          top_p: params?.top_p ?? 0.9,
-          num_predict: params?.max_tokens ?? 1024,
-        },
+    if (!fs.existsSync(modelPath)) {
+      throw new Error(`Model file not found at ${modelPath}. Please download a .gguf file.`);
+    }
+
+    try {
+      this.llama = await getLlama();
+      this.model = await this.llama.loadModel({ modelPath });
+      
+      // Calculate context size dynamically or use default
+      this.context = await this.model.createContext({
+        contextSize: 4096, // Safe default for summarizing articles
+        threads: 4 // Adjust based on CPU
+      });
+
+      this.grammarJson = await this.llama.getGrammarFor("json");
+
+      this.isInitialized = true;
+      logger.info(`[llama-service]: Successfully loaded model and created context in-memory.`);
+    } catch (error: any) {
+      throw new Error(`Native Llama init failed: ${error.message}`);
+    }
+  }
+
+  async generateCompletion(prompt: string, systemPrompt?: string, params?: LlamaInferenceParams): Promise<string> {
+    if (this.initPromise && !this.isInitialized) {
+      logger.info(`[llama-service]: Waiting for model initialization...`);
+      await this.initPromise;
+    }
+
+    if (!this.isInitialized) {
+      throw new AppError('Llama Service is not initialized due to missing model or memory error.', 500);
+    }
+
+    try {
+      logger.info(`[llama-service]: Running native inference...`);
+
+      // Create a fresh session for each request, but share the context memory pool
+      const session = new LlamaChatSession({ 
+        contextSequence: this.context.getSequence(),
+        systemPrompt: systemPrompt
+      });
+
+      const generationParams: any = {
+        temperature: params?.temperature ?? 0.3,
+        topP: params?.top_p ?? 0.9,
+        maxTokens: params?.max_tokens ?? 2048,
       };
 
-      if (params?.format === 'json') {
-        payload.format = 'json';
+      if (params?.format === 'json' && this.grammarJson) {
+        generationParams.grammar = this.grammarJson;
       }
 
-      if (systemPrompt) {
-        payload.system = systemPrompt;
-      }
+      // Generate response natively (this is CPU intensive)
+      const response = await session.prompt(prompt, generationParams);
 
-      const response = await this.client.post('/api/generate', payload);
-
-      if (response.status !== 200) {
-        throw new AppError(`Ollama API returned status ${response.status}`, 502);
-      }
-
-      logger.info('[llama-service]: Received completion from model.');
-      return response.data.response;
+      logger.info('[llama-service]: Native completion finished.');
+      return response;
 
     } catch (error: any) {
-      logger.error(`[llama-service]: Failed to generate completion - ${error.message}`);
-      
-      if (error.code === 'ECONNREFUSED') {
-        throw new AppError('Llama/Ollama service is unreachable. Is the daemon running?', 503);
-      }
-      
+      logger.error(`[llama-service]: Inference failed - ${error.message}`);
       throw new AppError(`AI Generation Error: ${error.message}`, 500);
     }
   }
 
-  /**
-   * Pings the Ollama service to check if it's healthy and available.
-   */
   async checkHealth(): Promise<boolean> {
-    try {
-      const response = await this.client.get('/');
-      return response.status === 200;
-    } catch {
-      return false;
-    }
+    return this.isInitialized;
   }
 }
 
