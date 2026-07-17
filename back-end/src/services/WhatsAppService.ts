@@ -146,7 +146,17 @@ export class WhatsAppService extends EventEmitter {
 
     // 1. Sanitize and format the number to Baileys JID format
     const sanitized = sanitizePhoneNumber(phoneNumber);
-    const jid = toWhatsAppJid(sanitized);
+    let jid = toWhatsAppJid(sanitized);
+
+    // 1.5. Resolve the actual registered JID on WhatsApp (fixes Brazilian 9th digit issue)
+    try {
+      const [result] = await this.socket.onWhatsApp(sanitized);
+      if (result && result.exists) {
+        jid = result.jid;
+      }
+    } catch (err) {
+      logger.warn(`[whatsapp]: Could not resolve onWhatsApp for ${sanitized}: ${err}`);
+    }
 
     // 2. Simulate typing presence to make it feel human
     await this.socket.presenceSubscribe(jid);
