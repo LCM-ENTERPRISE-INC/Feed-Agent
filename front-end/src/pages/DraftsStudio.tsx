@@ -240,6 +240,7 @@ export const DraftsStudio: React.FC = () => {
           resumo: formSummary,
           corpo: formContent,
           fonte: formSource,
+          status: formStatus,
         };
         const res = await apiClient.put(`/drafts/${editingDraft.id}`, payload);
         if (res.data?.success) {

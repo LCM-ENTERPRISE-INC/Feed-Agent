@@ -79,7 +79,7 @@ export class DraftController {
 
       const originalText = content;
 
-      const draft = await draftService.createDraft(userId, originalText, generatedContent, imagePath);
+      const draft = await draftService.createDraft(userId, originalText, generatedContent, imagePath, status);
 
       // Map back to frontend expected fields if needed, but the frontend reloads or maps it
       ApiResponse.success(res, draft, 'Draft created successfully.', 201);
@@ -105,7 +105,14 @@ export class DraftController {
         throw new AppError('Invalid request body. Expected a JSON object.', 400);
       }
 
-      const updatedDraft = await draftService.updateDraftContent(draftId, userId, req.body);
+      const { status, ...generatedContent } = req.body;
+
+      const updatedDraft = await draftService.updateDraftContent(draftId, userId, generatedContent);
+      
+      if (status) {
+        await draftService.updateDraftStatus(draftId, status);
+        updatedDraft.status = status;
+      }
 
       ApiResponse.success(res, updatedDraft, 'Draft updated successfully.', 200);
     } catch (err) {
