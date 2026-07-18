@@ -2,7 +2,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import logger from '../utils/logger';
 import redisClient from '../utils/redisClient';
 import draftService from '../services/DraftService';
-import whatsAppService from '../services/WhatsAppService';
+import whatsAppInstanceManager from '../services/WhatsAppInstanceManager';
 import feedHistoryService from '../services/FeedHistoryService';
 import contactService from '../services/ContactService';
 import { Contact } from '@prisma/client';
@@ -49,7 +49,18 @@ export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
       }
       const messageText = `*${content.titulo || 'Notícia'}*\n\n${bodyText}\n\n_Fonte: ${content.fonte || 'Desconhecida'}_`;
 
-      // 3. Send Messages Sequentially
+      // 3. Retrieve User's Connected WhatsApp Instances
+      const userInstances = whatsAppInstanceManager.getInstancesForUser(userId).filter(
+        inst => inst.getStatus().state === 'open'
+      );
+      
+      if (userInstances.length === 0) {
+        throw new Error(`No connected WhatsApp instances found for user ${userId}. Cannot broadcast.`);
+      }
+
+      logger.info(`[broadcast-worker]: Found ${userInstances.length} connected instances for user ${userId}. Using Round-Robin routing.`);
+
+      // 4. Send Messages Sequentially with Round-Robin
       let successCount = 0;
       let failCount = 0;
 
@@ -73,11 +84,17 @@ export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
         });
 
         try {
-          // 2. Use the provided delayMs or fallback to a default 3.5s delay
-          const delayMs = job.data.delayMs || 3500;
-          const messageId = await whatsAppService.sendMessage(contact.phoneNumber, messageText, delayMs, job.data.imagePath || undefined);
+          // 2. Select Instance via Round-Robin
+          const instanceToUse = userInstances[i % userInstances.length];
+          const instanceId = instanceToUse.getInstanceId();
           
-          // 3. Mark as sent and associate messageId
+          logger.info(`[broadcast-worker]: Routing message to contact ${contact.phoneNumber} via instance ${instanceId}`);
+          
+          // 3. Use the provided delayMs or fallback to a default 3.5s delay
+          const delayMs = job.data.delayMs || 3500;
+          const messageId = await instanceToUse.sendMessage(contact.phoneNumber, messageText, delayMs, job.data.imagePath || undefined);
+          
+          // 4. Mark as sent and associate messageId
           await feedHistoryService.updateMessageStatus(String(logRecord._id), 'sent', undefined, messageId);
           successCount++;
         } catch (error) {

@@ -1,8 +1,7 @@
-jest.mock('../../services/WhatsAppService', () => ({
+jest.mock('../../services/WhatsAppInstanceManager', () => ({
   __esModule: true,
   default: {
-    sendMessage: jest.fn(),
-    on: jest.fn()
+    getInstancesForUser: jest.fn(),
   }
 }));
 jest.mock('../../utils/redisClient', () => ({
@@ -24,7 +23,7 @@ jest.mock('../../services/ContactService');
 
 import { broadcastProcessor } from '../broadcastQueue';
 import draftService from '../../services/DraftService';
-import whatsAppService from '../../services/WhatsAppService';
+import whatsAppInstanceManager from '../../services/WhatsAppInstanceManager';
 import feedHistoryService from '../../services/FeedHistoryService';
 import contactService from '../../services/ContactService';
 import { Job } from 'bullmq';
@@ -60,14 +59,21 @@ describe('BroadcastQueue', () => {
       _id: new Types.ObjectId().toString()
     });
 
-    (whatsAppService.sendMessage as jest.Mock).mockResolvedValue('msg-id-123');
+    const mockInstance = {
+      getInstanceId: jest.fn().mockReturnValue(1),
+      sendMessage: jest.fn().mockResolvedValue('msg-id-123'),
+      getStatus: jest.fn().mockReturnValue({ state: 'open' })
+    };
+
+    (whatsAppInstanceManager.getInstancesForUser as jest.Mock).mockReturnValue([mockInstance]);
   });
 
   it('should process contacts and send messages successfully', async () => {
     const result = await broadcastProcessor(mockJob as Job);
 
+    const mockInstance = whatsAppInstanceManager.getInstancesForUser(1)[0];
     expect(result.successCount).toBe(2);
-    expect(whatsAppService.sendMessage).toHaveBeenCalledTimes(2);
+    expect(mockInstance.sendMessage).toHaveBeenCalledTimes(2);
     expect(feedHistoryService.updateMessageStatus).toHaveBeenCalledWith(
       expect.any(String),
       'sent',
@@ -84,12 +90,14 @@ describe('BroadcastQueue', () => {
 
     const result = await broadcastProcessor(mockJob as Job);
 
+    const mockInstance = whatsAppInstanceManager.getInstancesForUser(1)[0];
     expect(result.successCount).toBe(1);
-    expect(whatsAppService.sendMessage).toHaveBeenCalledTimes(1);
+    expect(mockInstance.sendMessage).toHaveBeenCalledTimes(1);
   });
 
   it('should slice and throw error on timeout/network issue (Retry Logic)', async () => {
-    (whatsAppService.sendMessage as jest.Mock)
+    const mockInstance = whatsAppInstanceManager.getInstancesForUser(1)[0];
+    (mockInstance.sendMessage as jest.Mock)
       .mockResolvedValueOnce('msg-id-123') // first contact succeeds
       .mockRejectedValueOnce({ statusCode: 504, message: 'timeout' }); // second contact times out
 
@@ -104,7 +112,8 @@ describe('BroadcastQueue', () => {
   });
 
   it('should deactivate contact on 404 / Not Registered error', async () => {
-    (whatsAppService.sendMessage as jest.Mock).mockRejectedValueOnce({ statusCode: 404, message: 'not registered' });
+    const mockInstance = whatsAppInstanceManager.getInstancesForUser(1)[0];
+    (mockInstance.sendMessage as jest.Mock).mockRejectedValueOnce({ statusCode: 404, message: 'not registered' });
 
     const result = await broadcastProcessor(mockJob as Job);
 

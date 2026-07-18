@@ -13,7 +13,7 @@ import whatsappRoutes from './routes/whatsapp.routes';
 import newsRoutes from './routes/news.routes';
 import draftRoutes from './routes/draft.routes';
 import analyticsRoutes from './routes/analytics.routes';
-import whatsAppService from './services/WhatsAppService';
+import whatsAppInstanceManager from './services/WhatsAppInstanceManager';
 import feedHistoryService from './services/FeedHistoryService';
 import { initCronJobs } from './crons/cleanupCron';
 
@@ -93,17 +93,9 @@ async function startServer() {
       logger.info(`[server]: Running at http://localhost:${port}`);
       logger.info(`[swagger]: Docs available at http://localhost:${port}/api-docs`);
 
-      // WhatsApp is initialized AFTER the HTTP server is up so that the
-      // /api/whatsapp/status endpoint (Sprint 14) is already reachable when
-      // the QR code is generated. Failure here is non-fatal.
-      whatsAppService.initialize().catch((err: Error) => {
-        logger.error(`[whatsapp]: Failed to initialize: ${err.message}`, { stack: err.stack });
-      });
-
-      // Listen for message receipts (Sprint 36)
-      whatsAppService.on('message:status', async ({ messageId, status }) => {
-        await feedHistoryService.updateStatusByMessageId(messageId, status);
-        logger.info(`[whatsapp-webhook]: Message ${messageId} status updated to ${status}`);
+      // WhatsApp Manager initializes all DB instances
+      whatsAppInstanceManager.loadAllInstances().catch((err: Error) => {
+        logger.error(`[whatsapp-manager]: Failed to load instances: ${err.message}`, { stack: err.stack });
       });
 
       // Initialize Data Cleanup CRON jobs (Sprint 39)

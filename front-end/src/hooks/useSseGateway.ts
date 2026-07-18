@@ -9,7 +9,7 @@ export interface SseEvent<T = any> {
   timestamp: string;
 }
 
-export const useSseGateway = (onEvent?: (event: SseEvent) => void) => {
+export const useSseGateway = (instanceId: number, onEvent?: (event: SseEvent) => void) => {
   const token = useAuthStore((state) => state.token);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [connectionStatus, setConnectionStatus] = useState<SseConnectionStatus>('disconnected');
@@ -32,7 +32,7 @@ export const useSseGateway = (onEvent?: (event: SseEvent) => void) => {
     const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
     // Clean trailing slash if present
     const cleanBaseURL = baseURL.replace(/\/+$/, '');
-    const sseURL = `${cleanBaseURL}/whatsapp/qr/stream?token=${token}`;
+    const sseURL = `${cleanBaseURL}/whatsapp/instances/${instanceId}/stream?token=${token}`;
 
     setConnectionStatus('connecting');
     const eventSource = new EventSource(sseURL);
@@ -83,7 +83,7 @@ export const useSseGateway = (onEvent?: (event: SseEvent) => void) => {
     };
 
     return eventSource;
-  }, [token, isAuthenticated]);
+  }, [token, isAuthenticated, instanceId]);
 
   useEffect(() => {
     const eventSource = connect();

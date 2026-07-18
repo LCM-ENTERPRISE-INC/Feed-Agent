@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import whatsAppService from '../services/WhatsAppService';
+import whatsAppInstanceManager from '../services/WhatsAppInstanceManager';
+import prisma from '../models/prismaClient';
 import { ApiResponse } from '../utils/ApiResponse';
 import { AppError } from '../utils/AppError';
 import logger from '../utils/logger';
@@ -11,35 +12,120 @@ const SSE_HEARTBEAT_MS = 25_000;
  * Handles HTTP endpoints for WhatsApp connection management.
  */
 export class WhatsAppController {
+  
   /**
-   * GET /api/whatsapp/status
-   * Returns the current WhatsApp connection state as a JSON snapshot.
-   * Used by the dashboard for lightweight polling (e.g. every 5s after QR scan).
+   * GET /api/whatsapp/instances
+   * Returns all WhatsApp instances for the authenticated user along with their live state.
    */
-  async getStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getInstances(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const status = whatsAppService.getStatus();
-      ApiResponse.success(res, status, 'WhatsApp status retrieved.');
+      const userId = (req as any).user.id;
+      const dbInstances = await prisma.whatsAppInstance.findMany({
+        where: { userId },
+        orderBy: { id: 'asc' }
+      });
+
+      const instances = dbInstances.map((inst: any) => {
+        const liveInstance = whatsAppInstanceManager.getInstance(inst.id);
+        const liveStatus = liveInstance ? liveInstance.getStatus() : { state: 'DISCONNECTED' };
+        
+        return {
+          id: inst.id,
+          name: inst.name,
+          dbStatus: inst.status,
+          liveStatus
+        };
+      });
+
+      ApiResponse.success(res, instances, 'WhatsApp instances retrieved.');
     } catch (err) {
       next(err);
     }
   }
 
   /**
-   * GET /api/whatsapp/qr/stream
-   * Opens a Server-Sent Events (SSE) stream.
-   *
-   * Event types pushed to the client:
-   *  - `qr`          — new QR Code ready  { qrCode: "<base64 PNG>" }
-   *  - `connected`   — device scanned and session established
-   *  - `disconnected`— connection dropped  { reason: <number | null> }
-   *  - `qr:timeout`  — QR expired without scan
-   *  - `heartbeat`   — keepalive ping every 25s
-   *
-   * The client should use the native `EventSource` API with the JWT token
-   * passed as a query param: `/api/whatsapp/qr/stream?token=<jwt>`
+   * POST /api/whatsapp/instances
+   * Creates a new WhatsApp instance slot for the user. Max 5 slots allowed.
+   */
+  async createInstance(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = (req as any).user.id;
+      const { name } = req.body;
+
+      const currentCount = await prisma.whatsAppInstance.count({ where: { userId } });
+      if (currentCount >= 5) {
+        throw new AppError('Você atingiu o limite máximo de 5 conexões do WhatsApp.', 403);
+      }
+
+      const instanceName = name || `Dispositivo ${currentCount + 1}`;
+
+      const newInstance = await prisma.whatsAppInstance.create({
+        data: {
+          userId,
+          name: instanceName,
+          status: 'DISCONNECTED'
+        }
+      });
+
+      // Initialize the live instance
+      whatsAppInstanceManager.addInstance(newInstance.id, userId);
+
+      ApiResponse.success(res, newInstance, 'Nova instância WhatsApp criada.', 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * DELETE /api/whatsapp/instances/:id
+   * Removes a WhatsApp instance, logs it out, and deletes the DB record.
+   */
+  async deleteInstance(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = (req as any).user.id;
+      const instanceId = parseInt(req.params.id as string, 10);
+
+      const instance = await prisma.whatsAppInstance.findFirst({
+        where: { id: instanceId, userId }
+      });
+
+      if (!instance) {
+        throw new AppError('Instância não encontrada.', 404);
+      }
+
+      // Remove live instance (triggers logout and session wipe)
+      await whatsAppInstanceManager.removeInstance(instanceId);
+
+      // Delete DB record
+      await prisma.whatsAppInstance.delete({
+        where: { id: instanceId }
+      });
+
+      ApiResponse.success(res, null, 'Instância removida com sucesso.');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/whatsapp/instances/:id/stream
+   * Opens a Server-Sent Events (SSE) stream for a specific instance.
    */
   streamQr(req: Request, res: Response): void {
+    const userId = (req as any).user?.id;
+    const instanceId = parseInt(req.params.id as string, 10);
+
+    if (!userId || isNaN(instanceId)) {
+      res.status(400).end();
+      return;
+    }
+
+    const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
+    if (!liveInstance || liveInstance.getUserId() !== userId) {
+      res.status(404).json({ message: 'Instance not found or not active.' });
+      return;
+    }
+
     // ── Set SSE headers ───────────────────────────────────────────────────
     res.setHeader('Content-Type',                'text/event-stream');
     res.setHeader('Cache-Control',               'no-cache, no-transform');
@@ -47,7 +133,7 @@ export class WhatsAppController {
     res.setHeader('X-Accel-Buffering',           'no'); // Disable Nginx buffering
     res.flushHeaders();
 
-    logger.info(`[whatsapp/sse]: New SSE client connected from ${req.ip}`);
+    logger.info(`[whatsapp-sse]: Client connected for instance ${instanceId} from ${req.ip}`);
 
     // ── Helper to push typed SSE events ──────────────────────────────────
     const pushEvent = (event: string, data: object | null = null): void => {
@@ -55,8 +141,8 @@ export class WhatsAppController {
       res.write(`data: ${JSON.stringify(data ?? {})}\n\n`);
     };
 
-    // ── Send the current status immediately so the client doesn't wait ────
-    const current = whatsAppService.getStatus();
+    // ── Send the current status immediately ───────────────────────────────
+    const current = liveInstance.getStatus();
     if (current.qrCode) {
       pushEvent('qr', { qrCode: current.qrCode });
     } else {
@@ -69,10 +155,10 @@ export class WhatsAppController {
     const onClose      = (reason?: number) => pushEvent('disconnected',  { reason: reason ?? null });
     const onQrTimeout  = ()                => pushEvent('qr:timeout',    null);
 
-    whatsAppService.on('wa:qr',         onQr);
-    whatsAppService.on('wa:open',       onOpen);
-    whatsAppService.on('wa:close',      onClose);
-    whatsAppService.on('wa:qr:timeout', onQrTimeout);
+    liveInstance.on('wa:qr',         onQr);
+    liveInstance.on('wa:open',       onOpen);
+    liveInstance.on('wa:close',      onClose);
+    liveInstance.on('wa:qr:timeout', onQrTimeout);
 
     // ── Heartbeat — keeps connection alive through proxies ────────────────
     const heartbeat = setInterval(() => {
@@ -81,57 +167,76 @@ export class WhatsAppController {
 
     // ── Cleanup when the client disconnects ───────────────────────────────
     req.on('close', () => {
-      logger.info(`[whatsapp/sse]: SSE client disconnected from ${req.ip}`);
+      logger.info(`[whatsapp-sse]: Client disconnected for instance ${instanceId}`);
       clearInterval(heartbeat);
-      whatsAppService.off('wa:qr',         onQr);
-      whatsAppService.off('wa:open',       onOpen);
-      whatsAppService.off('wa:close',      onClose);
-      whatsAppService.off('wa:qr:timeout', onQrTimeout);
+      liveInstance.off('wa:qr',         onQr);
+      liveInstance.off('wa:open',       onOpen);
+      liveInstance.off('wa:close',      onClose);
+      liveInstance.off('wa:qr:timeout', onQrTimeout);
     });
   }
 
   /**
-   * POST /api/whatsapp/test-message
-   * Endpoint strictly for administrators to test the WhatsApp connection.
-   * Sends a simple text payload to the provided phone number.
+   * POST /api/whatsapp/instances/:id/test-message
    */
   async sendTestMessage(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      const userId = (req as any).user.id;
+      const instanceId = parseInt(req.params.id as string, 10);
       const { phoneNumber, message } = req.body;
 
       if (!phoneNumber || !message) {
         throw new AppError('phoneNumber and message are required in the body.', 400);
       }
 
-      await whatsAppService.sendMessage(phoneNumber, message);
+      const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
+      if (!liveInstance || liveInstance.getUserId() !== userId) {
+        throw new AppError('Instância não ativa ou não autorizada.', 404);
+      }
+
+      await liveInstance.sendMessage(phoneNumber, message);
       
-      ApiResponse.success(res, null, 'Test message queued for sending.');
+      ApiResponse.success(res, null, 'Mensagem de teste enviada.');
     } catch (err) {
       next(err);
     }
   }
 
   /**
-   * POST /api/whatsapp/restart
-   * Restarts the WhatsApp session to generate a new QR Code.
+   * POST /api/whatsapp/instances/:id/restart
    */
   async restart(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      await whatsAppService.restart();
-      ApiResponse.success(res, null, 'WhatsApp session restarted and new QR generation initiated.');
+      const userId = (req as any).user.id;
+      const instanceId = parseInt(req.params.id as string, 10);
+
+      const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
+      if (!liveInstance || liveInstance.getUserId() !== userId) {
+        throw new AppError('Instância não ativa.', 404);
+      }
+
+      await liveInstance.restart();
+      ApiResponse.success(res, null, 'Sessão reiniciada.');
     } catch (err) {
       next(err);
     }
   }
 
   /**
-   * POST /api/whatsapp/logout
-   * Logs out from the active WhatsApp session and clears credentials.
+   * POST /api/whatsapp/instances/:id/logout
    */
   async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      await whatsAppService.logout();
-      ApiResponse.success(res, null, 'WhatsApp session disconnected successfully.');
+      const userId = (req as any).user.id;
+      const instanceId = parseInt(req.params.id as string, 10);
+
+      const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
+      if (!liveInstance || liveInstance.getUserId() !== userId) {
+        throw new AppError('Instância não ativa.', 404);
+      }
+
+      await liveInstance.logout();
+      ApiResponse.success(res, null, 'WhatsApp desconectado.');
     } catch (err) {
       next(err);
     }
