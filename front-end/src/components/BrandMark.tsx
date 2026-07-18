@@ -11,8 +11,8 @@ interface BrandMarkProps {
 }
 
 /**
- * Marca ZapBusiness conforme guia visual:
- * símbolo Z + wordmark (Zap / Business). Sem “by LCM” no logo.
+ * Marca ZapBusiness: monograma ZB + wordmark (Zap / Business).
+ * Sem “by LCM” no logo (LCM só em copyright/rodapé).
  */
 export const BrandMark: React.FC<BrandMarkProps> = ({
   compact = false,

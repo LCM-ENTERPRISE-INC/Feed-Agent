@@ -12,7 +12,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "validate:modal": "node scripts/validate-connection-modal.mjs"
+    "validate:modal": "node scripts/validate-connection-modal.mjs",
+    "generate:brand": "node scripts/generate-brand-assets.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.10",

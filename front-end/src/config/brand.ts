@@ -1,6 +1,6 @@
 /**
  * Fonte única de verdade da marca ZapBusiness (LCM no copyright institucional).
- * Identidade visual provisória até assets oficiais.
+ * Identidade visual oficial: monograma ZB (ver src/assets/brand/).
  */
 export const BRAND = {
   productName: 'ZapBusiness',

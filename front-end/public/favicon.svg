@@ -1,15 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="#07111F"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-hidden="true">
   <defs>
-    <linearGradient id="fav-z" x1="6" y1="5" x2="26" y2="27" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0072BB"/>
-      <stop offset="1" stop-color="#00AEEF"/>
-    </linearGradient>
-  </defs>
-  <path d="M8 7h15L12 16h11L9 25h15" stroke="url(#fav-z)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M21 18.5c0-2.1 1.7-3.8 3.8-3.8h.6c2.1 0 3.8 1.7 3.8 3.8v.7c0 2.1-1.7 3.8-3.8 3.8h-1.4L22.2 25v-2.1c-.8-.8-1.2-1.8-1.2-3V18.5z" fill="#0072BB"/>
-  <circle cx="23.6" cy="19.3" r="0.7" fill="#F4F8FC"/>
-  <circle cx="25.6" cy="19.3" r="0.7" fill="#F4F8FC"/>
-  <circle cx="27.6" cy="29.3" r="0.7" fill="#F4F8FC" opacity="0"/>
-  <circle cx="27.6" cy="19.3" r="0.7" fill="#F4F8FC"/>
+  <linearGradient id="zb" x1="16" y1="12" x2="114" y2="118" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#5CEBFF"/>
+    <stop offset="38%" stop-color="#14B4EE"/>
+    <stop offset="72%" stop-color="#0070C0"/>
+    <stop offset="100%" stop-color="#004A96"/>
+  </linearGradient>
+  <linearGradient id="zbFold" x1="42" y1="55" x2="78" y2="108" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#002B56" stop-opacity="0"/>
+    <stop offset="50%" stop-color="#002B56" stop-opacity="0.22"/>
+    <stop offset="100%" stop-color="#001A38" stop-opacity="0.34"/>
+  </linearGradient><radialGradient id="bgGlow" cx="50%" cy="42%" r="58%">
+      <stop offset="0%" stop-color="#122038"/>
+      <stop offset="100%" stop-color="#07111F" stop-opacity="0"/>
+    </radialGradient></defs>
+  <rect width="128" height="128" rx="28" fill="#07111F"/>
+  <rect width="128" height="128" rx="28" fill="url(#bgGlow)"/>
+  
+  <g fill="none" stroke="url(#zb)" stroke-width="15">
+    <path d="M17 30 H80 L42 104"
+          stroke-linecap="round"
+          stroke-linejoin="miter"
+          stroke-miterlimit="2.15"/>
+    <path d="M66 35
+             C90 32 108 30 110 41
+             C112 52 96 56 68 56"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    <path d="M58 66 H96" stroke-linecap="round"/>
+    <path d="M42 104
+             C43 112 58 116 80 116
+             C104 116 114 101 112 82
+             C110 67 96 62 70 64"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g>
 </svg>

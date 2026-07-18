@@ -1,8 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" fill="none" role="img" aria-hidden="true">
-  <path d="M12 10h22l-16 14h15.5L14 38h22" stroke="#F4F8FC" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M31 28c0-3.3 2.7-6 6-6h1c3.3 0 6 2.7 6 6v1.2c0 3.3-2.7 6-6 6h-2.2L33 38.5V35c-1.2-1.2-2-2.9-2-4.8V28z" fill="#F4F8FC"/>
-  <circle cx="35.2" cy="29.2" r="1.15" fill="#07111F"/>
-  <circle cx="38.5" cy="29.2" r="1.15" fill="#07111F"/>
-  <circle cx="41.8" cy="29.2" r="1.15" fill="#07111F"/>
-  <text x="56" y="31" fill="#F4F8FC" font-family="Plus Jakarta Sans, system-ui, sans-serif" font-size="22" font-weight="700">ZapBusiness</text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 72" fill="none" role="img" aria-hidden="true">
+  <defs>
+  <linearGradient id="zb" x1="16" y1="12" x2="114" y2="118" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#5CEBFF"/>
+    <stop offset="38%" stop-color="#14B4EE"/>
+    <stop offset="72%" stop-color="#0070C0"/>
+    <stop offset="100%" stop-color="#004A96"/>
+  </linearGradient>
+  <linearGradient id="zbFold" x1="42" y1="55" x2="78" y2="108" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#002B56" stop-opacity="0"/>
+    <stop offset="50%" stop-color="#002B56" stop-opacity="0.22"/>
+    <stop offset="100%" stop-color="#001A38" stop-opacity="0.34"/>
+  </linearGradient></defs>
+  <g transform="translate(-4,-24) scale(0.7)">
+  <g fill="none" stroke="url(#zb)" stroke-width="13.4">
+    <!-- Z: terminal redondo + CANTO VIVO + diagonal -->
+    <path d="M20 29 H84 L46 104"
+          stroke-linecap="round"
+          stroke-linejoin="miter"
+          stroke-miterlimit="2.15"/>
+    <path d="M84 29 L46 104" stroke="url(#zbFold)" stroke-width="11.792" stroke-linecap="butt" fill="none"/>
+    <!-- Lóbulo superior do B (D), topo alinhado à barra do Z -->
+    <path d="M69 34
+             C94 31 111 29 113.5 40
+             C116 51 98 55.5 71 55.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    <!-- Barra média do B nascendo da diagonal -->
+    <path d="M61 66 H100" stroke-linecap="round"/>
+    <!-- Pé do Z curva → lóbulo inferior do B -->
+    <path d="M46 104
+             C47 112 62 117 84 117
+             C109 117 119.5 101 118 82
+             C116.5 66 100 62 73 64"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g></g>
+  <text x="98" y="46" font-family="Plus Jakarta Sans, system-ui, sans-serif" font-size="28" font-weight="600" letter-spacing="-0.02em">
+    <tspan fill="#F4F8FC">Zap</tspan><tspan fill="#14B4EE">Business</tspan>
+  </text>
 </svg>

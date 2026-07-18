@@ -1,14 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="96" fill="#07111F"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-hidden="true">
   <defs>
-    <linearGradient id="pwa512-z" x1="100" y1="90" x2="400" y2="420" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0072BB"/>
-      <stop offset="1" stop-color="#00AEEF"/>
-    </linearGradient>
-  </defs>
-  <path d="M120 120h240L180 250h210L130 390h240" stroke="url(#pwa512-z)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M330 295c0-32 26-58 58-58h10c32 0 58 26 58 58v12c0 32-26 58-58 58h-22l-28 32v-32c-12-12-18-28-18-44v-26z" fill="#0072BB"/>
-  <circle cx="372" cy="307" r="10" fill="#F4F8FC"/>
-  <circle cx="404" cy="307" r="10" fill="#F4F8FC"/>
-  <circle cx="436" cy="307" r="10" fill="#F4F8FC"/>
+  <linearGradient id="zb" x1="16" y1="12" x2="114" y2="118" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#5CEBFF"/>
+    <stop offset="38%" stop-color="#14B4EE"/>
+    <stop offset="72%" stop-color="#0070C0"/>
+    <stop offset="100%" stop-color="#004A96"/>
+  </linearGradient>
+  <linearGradient id="zbFold" x1="42" y1="55" x2="78" y2="108" gradientUnits="userSpaceOnUse">
+    <stop offset="0%" stop-color="#002B56" stop-opacity="0"/>
+    <stop offset="50%" stop-color="#002B56" stop-opacity="0.22"/>
+    <stop offset="100%" stop-color="#001A38" stop-opacity="0.34"/>
+  </linearGradient><radialGradient id="bgGlow" cx="50%" cy="42%" r="58%">
+      <stop offset="0%" stop-color="#122038"/>
+      <stop offset="100%" stop-color="#07111F" stop-opacity="0"/>
+    </radialGradient></defs>
+  <rect width="128" height="128" rx="28" fill="#07111F"/>
+  <rect width="128" height="128" rx="28" fill="url(#bgGlow)"/>
+  
+  <g fill="none" stroke="url(#zb)" stroke-width="13.4">
+    <!-- Z: terminal redondo + CANTO VIVO + diagonal -->
+    <path d="M20 29 H84 L46 104"
+          stroke-linecap="round"
+          stroke-linejoin="miter"
+          stroke-miterlimit="2.15"/>
+    <path d="M84 29 L46 104" stroke="url(#zbFold)" stroke-width="11.792" stroke-linecap="butt" fill="none"/>
+    <!-- Lóbulo superior do B (D), topo alinhado à barra do Z -->
+    <path d="M69 34
+             C94 31 111 29 113.5 40
+             C116 51 98 55.5 71 55.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    <!-- Barra média do B nascendo da diagonal -->
+    <path d="M61 66 H100" stroke-linecap="round"/>
+    <!-- Pé do Z curva → lóbulo inferior do B -->
+    <path d="M46 104
+             C47 112 62 117 84 117
+             C109 117 119.5 101 118 82
+             C116.5 66 100 62 73 64"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g>
 </svg>

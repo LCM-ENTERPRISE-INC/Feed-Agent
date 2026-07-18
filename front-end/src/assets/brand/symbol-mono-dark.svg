@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 72" fill="none" role="img" aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-hidden="true">
   <defs>
   <linearGradient id="zb" x1="16" y1="12" x2="114" y2="118" gradientUnits="userSpaceOnUse">
     <stop offset="0%" stop-color="#5CEBFF"/>
@@ -12,14 +12,15 @@
     <stop offset="50%" stop-color="#002B56" stop-opacity="0.22"/>
     <stop offset="100%" stop-color="#001A38" stop-opacity="0.34"/>
   </linearGradient></defs>
-  <g transform="translate(-4,-24) scale(0.7)">
-  <g fill="none" stroke="url(#zb)" stroke-width="13.4">
+  
+  
+  <g fill="none" stroke="#0D2137" stroke-width="13.4">
     <!-- Z: terminal redondo + CANTO VIVO + diagonal -->
     <path d="M20 29 H84 L46 104"
           stroke-linecap="round"
           stroke-linejoin="miter"
           stroke-miterlimit="2.15"/>
-    <path d="M84 29 L46 104" stroke="url(#zbFold)" stroke-width="11.792" stroke-linecap="butt" fill="none"/>
+    
     <!-- Lóbulo superior do B (D), topo alinhado à barra do Z -->
     <path d="M69 34
              C94 31 111 29 113.5 40
@@ -35,8 +36,5 @@
              C116.5 66 100 62 73 64"
           stroke-linecap="round"
           stroke-linejoin="round"/>
-  </g></g>
-  <text x="98" y="46" font-family="Plus Jakarta Sans, system-ui, sans-serif" font-size="28" font-weight="600" letter-spacing="-0.02em">
-    <tspan fill="#F4F8FC">Zap</tspan><tspan fill="#14B4EE">Business</tspan>
-  </text>
+  </g>
 </svg>

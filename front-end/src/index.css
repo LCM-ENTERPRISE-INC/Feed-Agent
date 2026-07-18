@@ -773,8 +773,8 @@ a {
 .brand-mark__wordmark {
   font-family: var(--font-heading);
   font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   white-space: nowrap;
 }
 
