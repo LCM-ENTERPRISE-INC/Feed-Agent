@@ -39,9 +39,13 @@ import { Badge } from '@/components/Badge';
 import { Input } from '@/components/Input';
 import { showToast } from '@/utils/toastHelper';
 import apiClient from '@/services/apiClient';
+import {
+  draftPriorityColor,
+  type DraftPriority,
+  type DraftStatus,
+} from '@/pages/drafts/draftTypes';
 
-export type DraftStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
-export type DraftPriority = 'Baixa' | 'Média' | 'Alta' | 'Urgente';
+export type { DraftStatus, DraftPriority };
 
 export interface DraftItem {
   id: string;
@@ -59,6 +63,26 @@ export interface DraftItem {
   rejectionReason?: string;
 }
 
+interface ApiDraftArticle {
+  titulo?: string;
+  title?: string;
+  resumo?: string;
+  summary?: string;
+  text?: string;
+  corpo?: string;
+  fonte?: string;
+}
+
+interface ApiDraft {
+  id: number | string;
+  generatedContent?: ApiDraftArticle;
+  articleJson?: ApiDraftArticle;
+  originalText?: string;
+  status: DraftStatus;
+  createdAt: string;
+  imagePath?: string;
+}
+
 const WHATSAPP_EMOJIS = ['📢', '🚨', '🔥', '📌', '💰', '🏢', '📅', '✅', '⚠️', '👉', '📍', '🗳️', '⛽', '🤝', '📈', '✨', '⭐', '❤️'];
 
 export const DraftsStudio: React.FC = () => {
@@ -72,7 +96,7 @@ export const DraftsStudio: React.FC = () => {
       try {
         const res = await apiClient.get('/drafts');
         if (res.data?.success) {
-          const mappedDrafts: DraftItem[] = res.data.data.map((d: any) => {
+          const mappedDrafts: DraftItem[] = (res.data.data as ApiDraft[]).map((d) => {
             const article = d.generatedContent || d.articleJson || {};
             return {
               id: String(d.id),
@@ -90,7 +114,7 @@ export const DraftsStudio: React.FC = () => {
           });
           setDrafts(mappedDrafts);
         }
-      } catch (error) {
+      } catch {
         showToast.error('Erro ao carregar minutas.');
       }
     };
@@ -137,15 +161,7 @@ export const DraftsStudio: React.FC = () => {
     return matchesSearch && matchesCat;
   });
 
-  const getPriorityColor = (priority: DraftPriority) => {
-    switch (priority) {
-      case 'Baixa': return '#3b82f6';
-      case 'Média': return '#eab308';
-      case 'Alta': return '#f97316';
-      case 'Urgente': return '#ef4444';
-      default: return '#cbd5e1';
-    }
-  };
+  const getPriorityColor = (priority: DraftPriority) => draftPriorityColor(priority);
 
   const handleOpenEditor = (draft: DraftItem) => {
     setEditingDraft(draft);
@@ -230,7 +246,7 @@ export const DraftsStudio: React.FC = () => {
           setDrafts(prev => [newDraft, ...prev]);
           showToast.success('Nova minuta salva com sucesso no sistema!');
         }
-      } catch (err) {
+      } catch {
         showToast.error('Erro ao salvar a minuta no banco de dados.');
       }
     } else if (editingDraft) {
@@ -257,7 +273,7 @@ export const DraftsStudio: React.FC = () => {
           } : d));
           showToast.success('Minuta atualizada com sucesso!');
         }
-      } catch (err) {
+      } catch {
         showToast.error('Erro ao atualizar a minuta.');
       }
     }
@@ -295,7 +311,7 @@ export const DraftsStudio: React.FC = () => {
       } else {
         showToast.error('Falha ao disparar minuta diretamente.');
       }
-    } catch (err) {
+    } catch {
       showToast.error('Erro de conexão ao disparar a minuta.');
     } finally {
       setEditingDraft(null);
@@ -340,7 +356,7 @@ export const DraftsStudio: React.FC = () => {
       } else {
         showToast.error('Falha ao aprovar minuta.');
       }
-    } catch (err) {
+    } catch {
       showToast.error('Erro de conexão ao aprovar a minuta.');
     } finally {
       setIsAllocatingBullMq(false);
@@ -375,7 +391,7 @@ export const DraftsStudio: React.FC = () => {
       } else {
         showToast.error('Falha ao rejeitar a minuta.');
       }
-    } catch (err) {
+    } catch {
       showToast.error('Erro de conexão ao rejeitar a minuta.');
     } finally {
       setRejectDraftCandidate(null);
@@ -494,46 +510,46 @@ export const DraftsStudio: React.FC = () => {
             maxWidth: '650px', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden',
             boxShadow: '0 30px 100px rgba(0, 0, 0, 0.95)', border: '1px solid var(--success)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '24px', borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(34, 197, 94, 0.15)' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '24px', borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--success) 15%, transparent)' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-main)' }}>
                 <Send size={24} />
               </div>
               <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'white' }}>Aprovar para Envio Imediato?</h3>
-                <span style={{ fontSize: '0.85rem', color: '#86efac' }}>Confirmação de alocação de esteira de transmissão</span>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>Aprovar para Envio Imediato?</h3>
+                <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>Confirmação de alocação de esteira de transmissão</span>
               </div>
             </div>
 
-            <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: '#090d16' }}>
-              <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'var(--surface)' }}>
+              <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'var(--surface)', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Pauta Selecionada:</span>
-                <strong style={{ fontSize: '1rem', color: 'white' }}>{approveDraftCandidate.title}</strong>
+                <strong style={{ fontSize: '1rem', color: 'var(--text-main)' }}>{approveDraftCandidate.title}</strong>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Layers size={24} style={{ color: '#3b82f6' }} />
+                <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--info) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--info) 20%, transparent)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Layers size={24} style={{ color: 'var(--primary)' }} />
                   <div>
-                    <span style={{ fontSize: '0.75rem', color: '#93c5fd', display: 'block' }}>Público-Alvo:</span>
-                    <strong style={{ fontSize: '1.1rem', color: 'white' }}>125 Contatos Ativos</strong>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--info)', display: 'block' }}>Público-Alvo:</span>
+                    <strong style={{ fontSize: '1.1rem', color: 'var(--text-main)' }}>125 Contatos Ativos</strong>
                   </div>
                 </div>
 
-                <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Server size={24} style={{ color: '#10b981' }} />
+                <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--success) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--success) 20%, transparent)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Server size={24} style={{ color: 'var(--success)' }} />
                   <div>
-                    <span style={{ fontSize: '0.75rem', color: '#6ee7b7', display: 'block' }}>Fila BullMQ / Redis:</span>
-                    <strong style={{ fontSize: '1.1rem', color: 'white' }}>Prioridade {approveDraftCandidate.priority}</strong>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'block' }}>Fila BullMQ / Redis:</span>
+                    <strong style={{ fontSize: '1.1rem', color: 'var(--text-main)' }}>Prioridade {approveDraftCandidate.priority}</strong>
                   </div>
                 </div>
               </div>
 
-              <div style={{ padding: '14px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+              <div style={{ padding: '14px', borderRadius: '8px', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', border: '1px solid color-mix(in srgb, var(--border) 40%, transparent)', fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                 ⚠️ <strong>Atenção:</strong> Ao confirmar, o Feed-Agent registrará a aprovação e injetará os pacotes diretamente no gerenciador de filas do WhatsApp Hub.
               </div>
             </div>
 
-            <div style={{ padding: '20px 24px', backgroundColor: '#05070f', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <div style={{ padding: '20px 24px', backgroundColor: 'var(--background)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <Button type="button" variant="secondary" onClick={() => setApproveDraftCandidate(null)} disabled={isAllocatingBullMq} style={{ height: '42px' }}>
                 Cancelar
               </Button>
@@ -557,24 +573,24 @@ export const DraftsStudio: React.FC = () => {
             maxWidth: '600px', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden',
             boxShadow: '0 30px 100px rgba(0, 0, 0, 0.95)', border: '1px solid var(--error)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '24px', borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(239, 68, 68, 0.15)' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'var(--error)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '24px', borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--error) 15%, transparent)' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'var(--error)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-main)' }}>
                 <XCircle size={24} />
               </div>
               <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'white' }}>Rejeitar Minuta de Envio</h3>
-                <span style={{ fontSize: '0.85rem', color: '#fca5a5' }}>Devolução de pauta para equipe de curadoria</span>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>Rejeitar Minuta de Envio</h3>
+                <span style={{ fontSize: '0.85rem', color: 'var(--error)' }}>Devolução de pauta para equipe de curadoria</span>
               </div>
             </div>
 
-            <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: '#090d16' }}>
-              <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'var(--surface)' }}>
+              <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'var(--surface)', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Pauta Selecionada:</span>
-                <strong style={{ fontSize: '1rem', color: 'white' }}>{rejectDraftCandidate.title}</strong>
+                <strong style={{ fontSize: '1rem', color: 'var(--text-main)' }}>{rejectDraftCandidate.title}</strong>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <HelpCircle size={16} style={{ color: 'var(--error)' }} />
                   <span>Justificativa da Rejeição (Obrigatório)</span>
                 </label>
@@ -585,14 +601,14 @@ export const DraftsStudio: React.FC = () => {
                   rows={4}
                   required
                   style={{
-                    padding: '16px', borderRadius: '8px', backgroundColor: '#0b1220', border: '1px solid var(--border)',
-                    color: 'white', fontSize: '0.95rem', resize: 'none', outline: 'none', lineHeight: 1.5
+                    padding: '16px', borderRadius: '8px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)',
+                    color: 'var(--text-main)', fontSize: '0.95rem', resize: 'none', outline: 'none', lineHeight: 1.5
                   }}
                 />
               </div>
             </div>
 
-            <div style={{ padding: '20px 24px', backgroundColor: '#05070f', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <div style={{ padding: '20px 24px', backgroundColor: 'var(--background)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <Button type="button" variant="secondary" onClick={() => setRejectDraftCandidate(null)} style={{ height: '42px' }}>
                 Cancelar
               </Button>
@@ -616,11 +632,11 @@ export const DraftsStudio: React.FC = () => {
             maxWidth: 'min(96vw, 960px)', width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column',
             overflow: 'hidden', boxShadow: '0 30px 100px rgba(0, 0, 0, 0.95)', border: '1px solid var(--primary)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(15, 23, 42, 0.9)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--surface) 90%, transparent)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Code size={24} style={{ color: 'var(--primary)' }} />
                 <div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span>Editor de Metadados e Controle JSON</span>
                     <Badge variant="primary">Pipeline Tags</Badge>
                   </h3>
@@ -644,18 +660,18 @@ export const DraftsStudio: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', flex: 1, overflow: 'hidden' }}>
               
               {/* Left Column: Monospace Real-Time JSON Editor */}
-              <div style={{ padding: '24px', backgroundColor: '#05070f', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+              <div style={{ padding: '24px', backgroundColor: 'var(--background)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <FileCode size={16} style={{ color: 'var(--primary)' }} /> <span>Código-Fonte JSON (Editável em tempo real)</span>
                   </span>
                   
                   {jsonParseError ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--error)', fontSize: '0.8rem', fontWeight: 700, backgroundColor: 'rgba(239,68,68,0.1)', padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--error)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--error)', fontSize: '0.8rem', fontWeight: 700, backgroundColor: 'color-mix(in srgb, var(--error) 10%, transparent)', padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--error)' }}>
                       <X size={14} /> Erro de Sintaxe JSON
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontSize: '0.8rem', fontWeight: 700, backgroundColor: 'rgba(34,197,94,0.1)', padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--success)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontSize: '0.8rem', fontWeight: 700, backgroundColor: 'color-mix(in srgb, var(--success) 10%, transparent)', padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--success)' }}>
                       <CheckSquare size={14} /> JSON Válido e Formatado
                     </div>
                   )}
@@ -667,14 +683,14 @@ export const DraftsStudio: React.FC = () => {
                   placeholder={'{\n  "key": "value"\n}'}
                   spellCheck={false}
                   style={{
-                    flex: 1, padding: '20px', borderRadius: '8px', backgroundColor: '#0b1220', border: '1px solid var(--border)',
-                    fontFamily: 'monospace', fontSize: '0.95rem', color: '#6ee7b7', lineHeight: 1.6, outline: 'none',
+                    flex: 1, padding: '20px', borderRadius: '8px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)',
+                    fontFamily: 'monospace', fontSize: '0.95rem', color: 'var(--success)', lineHeight: 1.6, outline: 'none',
                     resize: 'none', minHeight: '340px', boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5)'
                   }}
                 />
 
                 {jsonParseError && (
-                  <div style={{ padding: '14px', borderRadius: '8px', backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid var(--error)', color: '#fca5a5', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ padding: '14px', borderRadius: '8px', backgroundColor: 'color-mix(in srgb, var(--error) 15%, transparent)', border: '1px solid var(--error)', color: 'var(--error)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <AlertTriangle size={18} style={{ color: 'var(--error)', flexShrink: 0 }} />
                     <span><strong>Falha de Parse:</strong> {jsonParseError}. O salvamento está bloqueado até a correção.</span>
                   </div>
@@ -682,9 +698,9 @@ export const DraftsStudio: React.FC = () => {
               </div>
 
               {/* Right Column: Visual Tag Editor and Quick Helpers */}
-              <div style={{ padding: '24px', backgroundColor: '#090d16', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
+              <div style={{ padding: '24px', backgroundColor: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                 <div>
-                  <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                     <TagIcon size={18} style={{ color: 'var(--primary)' }} />
                     <span>Inserção Rápida de Keywords</span>
                   </h4>
@@ -701,8 +717,8 @@ export const DraftsStudio: React.FC = () => {
                     placeholder="Nova keyword (ex: urgencia_sindical)"
                     onKeyDown={e => { if (e.key === 'Enter') handleAddQuickKeyword(); }}
                     style={{
-                      flex: 1, height: '42px', padding: '0 14px', borderRadius: '8px', backgroundColor: '#0f172a',
-                      border: '1px solid var(--border)', color: 'white', fontSize: '0.85rem', outline: 'none'
+                      flex: 1, height: '42px', padding: '0 14px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                      border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.85rem', outline: 'none'
                     }}
                   />
                   <Button type="button" variant="secondary" onClick={handleAddQuickKeyword} style={{ height: '42px' }}>
@@ -711,26 +727,26 @@ export const DraftsStudio: React.FC = () => {
                 </div>
 
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#e2e8f0' }}>Estrutura de Atributos Chave Recomendada</span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>Estrutura de Atributos Chave Recomendada</span>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', color: '#94a3b8' }}>
-                    <div style={{ padding: '10px 14px', backgroundColor: '#0f172a', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      <strong style={{ color: 'white' }}>keywords:</strong> Array de strings para filtros no dashboard
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    <div style={{ padding: '10px 14px', backgroundColor: 'var(--surface)', borderRadius: '6px', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
+                      <strong style={{ color: 'var(--text-main)' }}>keywords:</strong> Array de strings para filtros no dashboard
                     </div>
-                    <div style={{ padding: '10px 14px', backgroundColor: '#0f172a', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      <strong style={{ color: 'white' }}>relevance:</strong> "low" | "medium" | "high" | "urgent"
+                    <div style={{ padding: '10px 14px', backgroundColor: 'var(--surface)', borderRadius: '6px', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
+                      <strong style={{ color: 'var(--text-main)' }}>relevance:</strong> "low" | "medium" | "high" | "urgent"
                     </div>
-                    <div style={{ padding: '10px 14px', backgroundColor: '#0f172a', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      <strong style={{ color: 'white' }}>sentiment:</strong> "positive" | "neutral" | "warning"
+                    <div style={{ padding: '10px 14px', backgroundColor: 'var(--surface)', borderRadius: '6px', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
+                      <strong style={{ color: 'var(--text-main)' }}>sentiment:</strong> "positive" | "neutral" | "warning"
                     </div>
-                    <div style={{ padding: '10px 14px', backgroundColor: '#0f172a', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      <strong style={{ color: 'white' }}>aiModelVersion:</strong> Assinatura do modelo LLM curador
+                    <div style={{ padding: '10px 14px', backgroundColor: 'var(--surface)', borderRadius: '6px', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
+                      <strong style={{ color: 'var(--text-main)' }}>aiModelVersion:</strong> Assinatura do modelo LLM curador
                     </div>
                   </div>
                 </div>
 
-                <div style={{ marginTop: 'auto', padding: '16px', borderRadius: '8px', backgroundColor: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
-                  <span style={{ fontSize: '0.8rem', color: '#93c5fd', lineHeight: 1.4, display: 'block' }}>
+                <div style={{ marginTop: 'auto', padding: '16px', borderRadius: '8px', backgroundColor: 'color-mix(in srgb, var(--info) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--info) 20%, transparent)' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--info)', lineHeight: 1.4, display: 'block' }}>
                     💡 <strong>Proteção Ativa:</strong> O Feed-Agent inspeciona a árvore em tempo real. Estruturas JSON corrompidas ou malformadas são automaticamente bloqueadas de entrar no banco de dados.
                   </span>
                 </div>
@@ -751,13 +767,13 @@ export const DraftsStudio: React.FC = () => {
         }}>
           <div className="glass-panel" style={{
             maxWidth: 'min(96vw, 1100px)', width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column',
-            overflow: 'hidden', boxShadow: '0 30px 100px rgba(0, 0, 0, 0.95)', border: '1px solid #3b82f6',
+            overflow: 'hidden', boxShadow: '0 30px 100px rgba(0, 0, 0, 0.95)', border: '1px solid var(--info)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(15, 23, 42, 0.9)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--surface) 90%, transparent)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <GitCompare size={24} style={{ color: '#3b82f6' }} />
+                <GitCompare size={24} style={{ color: 'var(--primary)' }} />
                 <div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span>Auditoria de Fact-Checking & Alucinações (OCR vs IA)</span>
                     <Badge variant="primary">Llama 3 Guard</Badge>
                   </h3>
@@ -781,26 +797,26 @@ export const DraftsStudio: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1, overflow: 'hidden' }}>
               
               {/* Left Column: Raw OCR Text */}
-              <div style={{ padding: '24px', backgroundColor: '#05070f', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+              <div style={{ padding: '24px', backgroundColor: 'var(--background)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Search size={16} /> <span>Texto Bruto Extraído (Origem OCR)</span>
                   </span>
                   <Badge variant="neutral">Inalterado do Jornal</Badge>
                 </div>
 
                 <div style={{
-                  padding: '20px', borderRadius: '8px', backgroundColor: '#090d16', border: '1px solid rgba(255,255,255,0.1)',
-                  fontFamily: 'monospace', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: 1.6, whiteSpace: 'pre-wrap',
+                  padding: '20px', borderRadius: '8px', backgroundColor: 'var(--surface)', border: '1px solid color-mix(in srgb, var(--border) 40%, transparent)',
+                  fontFamily: 'monospace', fontSize: '0.95rem', color: 'var(--text-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
                   minHeight: '280px'
                 }}>
                   {auditDraft.rawOcrSourceText || '[Texto de origem OCR não localizado no histórico desta minuta]'}
                 </div>
 
-                <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                  <ShieldCheck size={20} style={{ color: '#3b82f6', flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'color-mix(in srgb, var(--info) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--info) 20%, transparent)', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <ShieldCheck size={20} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '2px' }} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white' }}>Verificação de Integridade e OCR Base</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>Verificação de Integridade e OCR Base</span>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
                       Este painel apresenta a leitura crua da imagem antes de qualquer formatação. Compare os números e nomes para evitar repasses errôneos.
                     </span>
@@ -809,27 +825,27 @@ export const DraftsStudio: React.FC = () => {
               </div>
 
               {/* Right Column: AI Synthesized Draft */}
-              <div style={{ padding: '24px', backgroundColor: '#0b1120', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+              <div style={{ padding: '24px', backgroundColor: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Smile size={16} style={{ color: 'var(--primary)' }} /> <span>Texto Sintetizado pela IA (Minuta de Envio)</span>
                   </span>
                   <Badge variant="success">Formatado Llama 3</Badge>
                 </div>
 
                 <div style={{
-                  padding: '20px', borderRadius: '8px', backgroundColor: '#0f172a', border: '1px solid #3b82f6',
-                  fontSize: '0.95rem', color: '#f8fafc', lineHeight: 1.6, whiteSpace: 'pre-wrap', minHeight: '280px',
+                  padding: '20px', borderRadius: '8px', backgroundColor: 'var(--surface)', border: '1px solid var(--info)',
+                  fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: 1.6, whiteSpace: 'pre-wrap', minHeight: '280px',
                   boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.4)'
                 }}>
                   {auditDraft.content}
                 </div>
 
                 {/* Discrepancy Hallucination Guard Panel */}
-                <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'color-mix(in srgb, var(--success) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--success) 20%, transparent)', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                   <ShieldCheck size={20} style={{ color: 'var(--success)', flexShrink: 0, marginTop: '2px' }} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white' }}>Auditoria de Fatos Concluída com Sucesso</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>Auditoria de Fatos Concluída com Sucesso</span>
                     <span style={{ fontSize: '0.8rem', color: 'var(--success)', lineHeight: 1.4 }}>
                       ✓ Valores numéricos verificados e idênticos à origem (5%, dia 20, dias 28 e 29)<br />
                       ✓ Sem indícios de alucinação ou extrapolação de fatos pela IA generativa
@@ -841,9 +857,9 @@ export const DraftsStudio: React.FC = () => {
             </div>
 
             {/* Bottom Discrepancy Highlight Bar */}
-            <div style={{ padding: '16px 24px', backgroundColor: '#090d16', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div style={{ padding: '16px 24px', backgroundColor: 'var(--surface)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#eab308' }}><AlertTriangle size={16} /> 0 Termos Suspeitos</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--warning)' }}><AlertTriangle size={16} /> 0 Termos Suspeitos</span>
                 <span>•</span>
                 <span>Grau de Confiança IA: <strong style={{ color: 'var(--success)' }}>98.4%</strong></span>
               </div>
@@ -870,11 +886,11 @@ export const DraftsStudio: React.FC = () => {
             maxWidth: 'min(96vw, 1100px)', width: '100%', maxHeight: '94vh', display: 'flex', flexDirection: 'column',
             overflow: 'hidden', boxShadow: '0 30px 90px rgba(0, 0, 0, 0.9)', border: '1px solid var(--primary)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--surface) 80%, transparent)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Edit3 size={24} style={{ color: 'var(--primary)' }} />
                 <div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
                     {isCreatingNew ? 'Criar Nova Minuta de Envio' : `Editor Avançado de Minuta • ${editingDraft?.title}`}
                   </h3>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -896,9 +912,9 @@ export const DraftsStudio: React.FC = () => {
             <div className="split-pane" style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
               
               {/* Left Column: Form Controls */}
-              <form onSubmit={handleSaveDraft} style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: '#090d16', overflowY: 'auto', borderRight: '1px solid var(--border)' }}>
+              <form onSubmit={handleSaveDraft} style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'var(--surface)', overflowY: 'auto', borderRight: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Título da Minuta</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Título da Minuta</label>
                   <input
                     type="text"
                     value={formTitle}
@@ -906,29 +922,29 @@ export const DraftsStudio: React.FC = () => {
                     placeholder="Ex: Alta dos combustíveis impacta mercado imobiliário"
                     required
                     style={{
-                      height: '44px', padding: '0 16px', borderRadius: '8px', backgroundColor: '#0f172a',
-                      border: '1px solid var(--border)', color: 'white', fontSize: '0.95rem', outline: 'none'
+                      height: '44px', padding: '0 16px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                      border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.95rem', outline: 'none'
                     }}
                   />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Fonte da Informação</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Fonte da Informação</label>
                     <input
                       type="text"
                       value={formSource}
                       onChange={e => setFormSource(e.target.value)}
                       placeholder="Ex: Folha de S. Paulo"
                       style={{
-                        height: '44px', padding: '0 16px', borderRadius: '8px', backgroundColor: '#0f172a',
-                        border: '1px solid var(--border)', color: 'white', fontSize: '0.9rem', outline: 'none'
+                        height: '44px', padding: '0 16px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                        border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.9rem', outline: 'none'
                       }}
                     />
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Anexo Multimídia (URL da Imagem)</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Anexo Multimídia (URL da Imagem)</label>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <input
                         type="text"
@@ -936,8 +952,8 @@ export const DraftsStudio: React.FC = () => {
                         onChange={e => setFormAttachment(e.target.value)}
                         placeholder="https://... (Deixe em branco se texto puro)"
                         style={{
-                          flex: 1, height: '44px', padding: '0 12px', borderRadius: '8px', backgroundColor: '#0f172a',
-                          border: '1px solid var(--border)', color: 'white', fontSize: '0.85rem', outline: 'none'
+                          flex: 1, height: '44px', padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                          border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.85rem', outline: 'none'
                         }}
                       />
                       <Button type="button" variant="secondary" icon={Paperclip} onClick={handleAddRandomAttachment} style={{ height: '44px', padding: '0 12px', fontSize: '0.8rem' }} title="Adicionar Imagem Aleatória de Teste">
@@ -948,15 +964,15 @@ export const DraftsStudio: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Resumo Executivo (Sintetizado pela IA)</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Resumo Executivo (Sintetizado pela IA)</label>
                   <textarea
                     value={formSummary}
                     onChange={e => setFormSummary(e.target.value)}
                     rows={2}
                     placeholder="Resumo em uma frase para controle interno e indexação..."
                     style={{
-                      padding: '12px 16px', borderRadius: '8px', backgroundColor: '#0f172a', border: '1px solid var(--border)',
-                      color: '#cbd5e1', fontSize: '0.9rem', resize: 'vertical', outline: 'none', fontFamily: 'inherit',
+                      padding: '12px 16px', borderRadius: '8px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)',
+                      color: 'var(--text-muted)', fontSize: '0.9rem', resize: 'vertical', outline: 'none', fontFamily: 'inherit',
                       lineHeight: 1.4
                     }}
                   />
@@ -964,13 +980,13 @@ export const DraftsStudio: React.FC = () => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Status Kanban</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Status Kanban</label>
                     <select
                       value={formStatus}
                       onChange={e => setFormStatus(e.target.value as DraftStatus)}
                       style={{
-                        height: '42px', padding: '0 12px', borderRadius: '8px', backgroundColor: '#0f172a',
-                        border: '1px solid var(--border)', color: 'white', fontSize: '0.9rem', outline: 'none', cursor: 'pointer'
+                        height: '42px', padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                        border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.9rem', outline: 'none', cursor: 'pointer'
                       }}
                     >
                       <option value="PENDING">PENDING (Pendente)</option>
@@ -981,13 +997,13 @@ export const DraftsStudio: React.FC = () => {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Prioridade</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Prioridade</label>
                     <select
                       value={formPriority}
                       onChange={e => setFormPriority(e.target.value as DraftPriority)}
                       style={{
-                        height: '42px', padding: '0 12px', borderRadius: '8px', backgroundColor: '#0f172a',
-                        border: '1px solid var(--border)', color: 'white', fontSize: '0.9rem', outline: 'none', cursor: 'pointer'
+                        height: '42px', padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                        border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.9rem', outline: 'none', cursor: 'pointer'
                       }}
                     >
                       <option value="Baixa">Baixa</option>
@@ -998,13 +1014,13 @@ export const DraftsStudio: React.FC = () => {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Categoria</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Categoria</label>
                     <select
                       value={formCategory}
                       onChange={e => setFormCategory(e.target.value)}
                       style={{
-                        height: '42px', padding: '0 12px', borderRadius: '8px', backgroundColor: '#0f172a',
-                        border: '1px solid var(--border)', color: 'white', fontSize: '0.9rem', outline: 'none', cursor: 'pointer'
+                        height: '42px', padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                        border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.9rem', outline: 'none', cursor: 'pointer'
                       }}
                     >
                       {categories.filter(c => c !== 'Todas').map(cat => (
@@ -1016,12 +1032,12 @@ export const DraftsStudio: React.FC = () => {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Corpo do Texto (Mensagem de Envio)</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Corpo do Texto (Mensagem de Envio)</label>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Dica: Insira quebras de linha e emojis à vontade</span>
                   </div>
 
                   {/* Emoji Quick Picker Toolbar */}
-                  <div style={{ display: 'flex', gap: '6px', padding: '8px 12px', backgroundColor: '#0f172a', borderRadius: '8px', border: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '6px', padding: '8px 12px', backgroundColor: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
                     <Smile size={16} style={{ color: 'var(--primary)' }} />
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: '6px' }}>Inserir Emoji:</span>
                     {WHATSAPP_EMOJIS.map(em => (
@@ -1045,8 +1061,8 @@ export const DraftsStudio: React.FC = () => {
                     placeholder="Escreva a mensagem completa que será enviada aos destinatários..."
                     required
                     style={{
-                      flex: 1, padding: '16px', borderRadius: '8px', backgroundColor: '#0f172a', border: '1px solid var(--border)',
-                      color: '#f8fafc', fontSize: '0.95rem', resize: 'none', outline: 'none', fontFamily: 'inherit',
+                      flex: 1, padding: '16px', borderRadius: '8px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)',
+                      color: 'var(--text-main)', fontSize: '0.95rem', resize: 'none', outline: 'none', fontFamily: 'inherit',
                       lineHeight: 1.5, minHeight: '220px'
                     }}
                   />
@@ -1067,22 +1083,22 @@ export const DraftsStudio: React.FC = () => {
               </form>
 
               {/* Right Column: Real-Time Mobile Phone Mockup Preview */}
-              <div style={{ backgroundColor: '#05070f', padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}>
+              <div style={{ backgroundColor: 'var(--background)', padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                   <Phone size={16} /> <span>Pré-visualização Interativa no Celular (WhatsApp Mockup)</span>
                 </div>
 
                 {/* Smartphone Container */}
                 <div style={{
-                  width: '350px', minHeight: '620px', borderRadius: '40px', backgroundColor: '#0b141a',
-                  border: '12px solid #1f2937', boxShadow: '0 25px 70px rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column',
+                  width: '350px', minHeight: '620px', borderRadius: '40px', backgroundColor: 'var(--surface-raised)',
+                  border: '12px solid var(--border)', boxShadow: '0 25px 70px rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column',
                   overflow: 'hidden', position: 'relative'
                 }}>
                   {/* Smartphone Top Notch / Speaker */}
-                  <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '120px', height: '24px', backgroundColor: '#1f2937', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', zIndex: 10 }} />
+                  <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '120px', height: '24px', backgroundColor: 'var(--border)', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', zIndex: 10 }} />
 
                   {/* WhatsApp App Header */}
-                  <div style={{ padding: '32px 16px 12px 16px', backgroundColor: '#008069', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'white' }}>
+                  <div style={{ padding: '32px 16px 12px 16px', backgroundColor: '#008069', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--text-main)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#cfe9e5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#008069', fontWeight: 700, fontSize: '0.9rem' }}>
                         FA
@@ -1119,48 +1135,48 @@ export const DraftsStudio: React.FC = () => {
                     }}>
                       {/* Attachment Image Preview */}
                       {formAttachment && (
-                        <div style={{ width: '100%', maxHeight: '180px', borderRadius: '8px', overflow: 'hidden', marginBottom: '8px', backgroundColor: '#e2e8f0' }}>
+                        <div style={{ width: '100%', maxHeight: '180px', borderRadius: '8px', overflow: 'hidden', marginBottom: '8px', backgroundColor: 'var(--text-main)' }}>
                           <img src={formAttachment} alt="anexo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.currentTarget.style.display = 'none'} />
                         </div>
                       )}
 
                       {/* Title Header */}
                       <div style={{ padding: '8px 12px 4px 12px' }}>
-                        <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#111827', display: 'block', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--surface)', display: 'block', marginBottom: '6px' }}>
                           {formTitle || 'Título da Notícia...'}
                         </span>
 
                         {/* Formatted Content */}
-                        <div style={{ fontSize: '0.9rem', color: '#374151', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--border)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                           {formContent || 'O corpo do texto digitado aparecerá aqui formatado em tempo real...'}
                         </div>
                       </div>
 
                       {/* Source Footnote & Timestamp */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 12px 8px 12px', marginTop: '4px', borderTop: '1px solid #f3f4f6' }}>
-                        <span style={{ fontSize: '0.7rem', color: '#6b7280', fontStyle: 'italic' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                           Fonte: {formSource || 'Desconhecida'}
                         </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.65rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '0.65rem' }}>
                           <span>{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                          <CheckCheck size={14} style={{ color: '#3b82f6' }} />
+                          <CheckCheck size={14} style={{ color: 'var(--primary)' }} />
                         </div>
                       </div>
                     </div>
 
                     {/* Broadcast simulation status */}
-                    <div style={{ alignSelf: 'flex-start', paddingLeft: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#64748b' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formStatus === 'APPROVED' ? '#22c55e' : '#eab308' }} />
+                    <div style={{ alignSelf: 'flex-start', paddingLeft: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: formStatus === 'APPROVED' ? 'var(--success)' : 'var(--warning)' }} />
                       <span>Status: <strong>{formStatus}</strong> • Prioridade {formPriority}</span>
                     </div>
                   </div>
 
                   {/* WhatsApp Message Input Bar */}
                   <div style={{ padding: '10px 14px', backgroundColor: '#f0f2f5', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ flex: 1, height: '38px', borderRadius: '20px', backgroundColor: 'white', display: 'flex', alignItems: 'center', padding: '0 16px', color: '#94a3b8', fontSize: '0.85rem' }}>
+                    <div style={{ flex: 1, height: '38px', borderRadius: '20px', backgroundColor: 'var(--text-main)', display: 'flex', alignItems: 'center', padding: '0 16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                       Mensagem simulada...
                     </div>
-                    <div style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: '#008069', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: '#008069', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Send size={16} />
                     </div>
                   </div>
@@ -1212,7 +1228,7 @@ export const DraftsStudio: React.FC = () => {
                 style={{
                   padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
                   border: '1px solid var(--border)', transition: 'all 0.2s',
-                  backgroundColor: selectedCategory === c ? 'var(--primary)' : 'rgba(255,255,255,0.03)',
+                  backgroundColor: selectedCategory === c ? 'var(--primary)' : 'color-mix(in srgb, var(--border) 20%, transparent)',
                   color: selectedCategory === c ? 'white' : 'var(--text-muted)',
                 }}
               >
@@ -1227,9 +1243,9 @@ export const DraftsStudio: React.FC = () => {
       <div className="responsive-grid" style={{ alignItems: 'flex-start' }}>
         
         {/* Column 1: PENDING */}
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'rgba(99, 102, 241, 0.4)' }}>
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--primary), 0.4)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid var(--primary)', paddingBottom: '12px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={18} style={{ color: 'var(--primary)' }} />
               <span>PENDING (Pendentes)</span>
             </h3>
@@ -1247,7 +1263,7 @@ export const DraftsStudio: React.FC = () => {
                   key={draft.id}
                   onClick={() => handleOpenEditor(draft)}
                   style={{
-                    padding: '16px', borderRadius: '10px', backgroundColor: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border)',
+                    padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--surface) 60%, transparent)', border: '1px solid var(--border)',
                     display: 'flex', flexDirection: 'column', gap: '12px', cursor: 'pointer', transition: 'all 0.2s ease-out',
                     position: 'relative'
                   }}
@@ -1255,40 +1271,40 @@ export const DraftsStudio: React.FC = () => {
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white', lineHeight: 1.3 }}>{draft.title}</span>
-                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.05)', color: getPriorityColor(draft.priority) }}>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.3 }}>{draft.title}</span>
+                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: 'color-mix(in srgb, var(--border) 30%, transparent)', color: getPriorityColor(draft.priority) }}>
                       {draft.priority}
                     </span>
                   </div>
 
-                  <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {draft.content}
                   </p>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '8px', borderTop: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Calendar size={12} /> <span>{draft.createdAt.split(' ')[0]}</span>
                     </div>
-                    <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>{draft.source}</span>
+                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{draft.source}</span>
                   </div>
 
                   {/* Quick actions bar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', paddingTop: '8px', borderTop: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                      <button type="button" onClick={(e) => handleOpenAudit(draft, e)} title="Auditar Fidelidade de Fatos (OCR vs IA)" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', color: '#3b82f6', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button type="button" onClick={(e) => handleOpenAudit(draft, e)} title="Auditar Fidelidade de Fatos (OCR vs IA)" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--info)', backgroundColor: 'color-mix(in srgb, var(--info) 10%, transparent)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <GitCompare size={12} /> IA Guard
                       </button>
 
-                      <button type="button" onClick={(e) => handleOpenJsonEditor(draft, e)} title="Editar Metadados JSON" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #10b981', backgroundColor: 'rgba(16,185,129,0.1)', color: '#10b981', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button type="button" onClick={(e) => handleOpenJsonEditor(draft, e)} title="Editar Metadados JSON" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--success)', backgroundColor: 'color-mix(in srgb, var(--success) 10%, transparent)', color: 'var(--success)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Code size={12} /> JSON Tags
                       </button>
                     </div>
 
                     <div style={{ display: 'flex', gap: '6px' }}>
-                      <button type="button" onClick={(e) => handleOpenApprovalModal(draft, e)} title="Aprovar e Disparar no BullMQ" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--success)', backgroundColor: 'rgba(34,197,94,0.15)', color: 'var(--success)', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button type="button" onClick={(e) => handleOpenApprovalModal(draft, e)} title="Aprovar e Disparar no BullMQ" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--success)', backgroundColor: 'color-mix(in srgb, var(--success) 15%, transparent)', color: 'var(--success)', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Send size={10} /> Aprovar &rarr;
                       </button>
-                      <button type="button" onClick={(e) => handleOpenRejectModal(draft, e)} title="Rejeitar com Justificativa" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--error)', backgroundColor: 'rgba(239,68,68,0.1)', color: 'var(--error)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}>
+                      <button type="button" onClick={(e) => handleOpenRejectModal(draft, e)} title="Rejeitar com Justificativa" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--error)', backgroundColor: 'color-mix(in srgb, var(--error) 10%, transparent)', color: 'var(--error)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}>
                         Rejeitar
                       </button>
                     </div>
@@ -1300,9 +1316,9 @@ export const DraftsStudio: React.FC = () => {
         </div>
 
         {/* Column 2: APPROVED */}
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'rgba(34, 197, 94, 0.4)' }}>
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--success) 40%, transparent)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid var(--success)', paddingBottom: '12px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CheckCircle size={18} style={{ color: 'var(--success)' }} />
               <span>APPROVED (Aprovadas)</span>
             </h3>
@@ -1320,36 +1336,36 @@ export const DraftsStudio: React.FC = () => {
                   key={draft.id}
                   onClick={() => handleOpenEditor(draft)}
                   style={{
-                    padding: '16px', borderRadius: '10px', backgroundColor: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border)',
+                    padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--surface) 60%, transparent)', border: '1px solid var(--border)',
                     display: 'flex', flexDirection: 'column', gap: '12px', cursor: 'pointer', transition: 'all 0.2s ease-out'
                   }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--success)'}
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white', lineHeight: 1.3 }}>{draft.title}</span>
-                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.05)', color: getPriorityColor(draft.priority) }}>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.3 }}>{draft.title}</span>
+                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: 'color-mix(in srgb, var(--border) 30%, transparent)', color: getPriorityColor(draft.priority) }}>
                       {draft.priority}
                     </span>
                   </div>
 
-                  <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {draft.content}
                   </p>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '8px', borderTop: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Calendar size={12} /> <span>{draft.createdAt.split(' ')[0]}</span>
                     </div>
-                    <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>{draft.source}</span>
+                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{draft.source}</span>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)' }} onClick={e => e.stopPropagation()}>
-                    <button type="button" onClick={(e) => handleOpenJsonEditor(draft, e)} title="Editar Metadados JSON" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #10b981', backgroundColor: 'rgba(16,185,129,0.1)', color: '#10b981', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', paddingTop: '8px', borderTop: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }} onClick={e => e.stopPropagation()}>
+                    <button type="button" onClick={(e) => handleOpenJsonEditor(draft, e)} title="Editar Metadados JSON" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--success)', backgroundColor: 'color-mix(in srgb, var(--success) 10%, transparent)', color: 'var(--success)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Code size={12} /> JSON Tags
                     </button>
 
-                    <button type="button" onClick={() => handleDirectBroadcast(draft)} title="Disparar Imediatamente" style={{ padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--success)', backgroundColor: 'var(--success)', color: 'white', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button type="button" onClick={() => handleDirectBroadcast(draft)} title="Disparar Imediatamente" style={{ padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--success)', backgroundColor: 'var(--success)', color: 'var(--text-main)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Send size={12} /> Disparar Agora
                     </button>
                   </div>
@@ -1360,9 +1376,9 @@ export const DraftsStudio: React.FC = () => {
         </div>
 
         {/* Column 3: REJECTED */}
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'rgba(239, 68, 68, 0.4)' }}>
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--error) 40%, transparent)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid var(--error)', paddingBottom: '12px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <XCircle size={18} style={{ color: 'var(--error)' }} />
               <span>REJECTED (Rejeitadas)</span>
             </h3>
@@ -1380,38 +1396,38 @@ export const DraftsStudio: React.FC = () => {
                   key={draft.id}
                   onClick={() => handleOpenEditor(draft)}
                   style={{
-                    padding: '16px', borderRadius: '10px', backgroundColor: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border)',
+                    padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--surface) 60%, transparent)', border: '1px solid var(--border)',
                     display: 'flex', flexDirection: 'column', gap: '12px', cursor: 'pointer', transition: 'all 0.2s ease-out', opacity: 0.85
                   }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--error)'}
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white', lineHeight: 1.3, textDecoration: 'line-through' }}>{draft.title}</span>
-                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.05)', color: getPriorityColor(draft.priority) }}>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.3, textDecoration: 'line-through' }}>{draft.title}</span>
+                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: 'color-mix(in srgb, var(--border) 30%, transparent)', color: getPriorityColor(draft.priority) }}>
                       {draft.priority}
                     </span>
                   </div>
 
-                  <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {draft.content}
                   </p>
 
                   {draft.rejectionReason && (
-                    <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '0.75rem', color: '#fca5a5' }}>
+                    <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: 'color-mix(in srgb, var(--error) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--error) 20%, transparent)', fontSize: '0.75rem', color: 'var(--error)' }}>
                       <strong>Motivo:</strong> {draft.rejectionReason}
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '8px', borderTop: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Calendar size={12} /> <span>{draft.createdAt.split(' ')[0]}</span>
                     </div>
-                    <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>{draft.source}</span>
+                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{draft.source}</span>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '4px' }} onClick={e => e.stopPropagation()}>
-                    <button type="button" onClick={() => handleQuickStatusChange(draft.id, 'PENDING')} title="Retornar para Pendente" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--primary)', backgroundColor: 'rgba(99,102,241,0.1)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}>
+                    <button type="button" onClick={() => handleQuickStatusChange(draft.id, 'PENDING')} title="Retornar para Pendente" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--primary)', backgroundColor: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}>
                       Revisar &rarr;
                     </button>
                     <button type="button" onClick={() => handleQuickStatusChange(draft.id, 'CANCELLED')} title="Arquivar" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)', backgroundColor: 'transparent', color: 'var(--text-muted)', fontSize: '0.7rem', cursor: 'pointer' }}>
@@ -1425,10 +1441,10 @@ export const DraftsStudio: React.FC = () => {
         </div>
 
         {/* Column 4: CANCELLED */}
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'rgba(100, 116, 139, 0.4)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #64748b', paddingBottom: '12px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Ban size={18} style={{ color: '#94a3b8' }} />
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--text-muted) 40%, transparent)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid var(--text-muted)', paddingBottom: '12px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Ban size={18} style={{ color: 'var(--text-muted)' }} />
               <span>CANCELLED (Canceladas)</span>
             </h3>
             <Badge variant="warning">
@@ -1445,24 +1461,24 @@ export const DraftsStudio: React.FC = () => {
                   key={draft.id}
                   onClick={() => handleOpenEditor(draft)}
                   style={{
-                    padding: '16px', borderRadius: '10px', backgroundColor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)',
+                    padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--surface) 40%, transparent)', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)',
                     display: 'flex', flexDirection: 'column', gap: '12px', cursor: 'pointer', transition: 'all 0.2s ease-out', opacity: 0.6
                   }}
                   onMouseEnter={e => e.currentTarget.style.opacity = '1'}
                   onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#94a3b8', lineHeight: 1.3 }}>{draft.title}</span>
-                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.02)', color: getPriorityColor(draft.priority) }}>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-muted)', lineHeight: 1.3 }}>{draft.title}</span>
+                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: 'color-mix(in srgb, var(--border) 15%, transparent)', color: getPriorityColor(draft.priority) }}>
                       {draft.priority}
                     </span>
                   </div>
 
-                  <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {draft.content}
                   </p>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', paddingTop: '8px', borderTop: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Calendar size={12} /> <span>{draft.createdAt.split(' ')[0]}</span>
                     </div>

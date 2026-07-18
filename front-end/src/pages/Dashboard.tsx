@@ -5,6 +5,7 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { StatePanel } from '@/components/StatePanel';
+import { PageHeader } from '@/components/PageHeader';
 import apiClient from '@/services/apiClient';
 
 export const Dashboard: React.FC = () => {
@@ -63,17 +64,15 @@ export const Dashboard: React.FC = () => {
         </Alert>
       )}
 
-      <div className="page-hero">
-        <div className="page-hero-copy">
-          <h1>Painel</h1>
-          <p>Resumo do dia e atalhos para o fluxo de disparos.</p>
-        </div>
-        <div className="page-hero-actions">
+      <PageHeader
+        title="Painel"
+        description="Resumo do dia e atalhos para o fluxo de disparos."
+        actions={
           <Button variant="secondary" icon={RefreshCw} onClick={fetchDashboardData} isLoading={loading}>
             Atualizar
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
         <StatePanel variant="error" title="Falha ao carregar" description={error} actionLabel="Tentar de novo" onAction={fetchDashboardData} />

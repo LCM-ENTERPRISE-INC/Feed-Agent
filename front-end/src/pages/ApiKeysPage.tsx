@@ -117,14 +117,14 @@ export const ApiKeysPage: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '20px' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Key size={32} style={{ color: '#10b981' }} />
+            <Key size={32} style={{ color: 'var(--success)' }} />
             <span>Chaves de Autenticação API e Integrações Externas</span>
           </h1>
           <p style={{ color: 'var(--text-muted)' }}>Gere tokens JWT estáticos seguros com controle de escopo e monitore contadores de requisições de webhooks</p>
         </div>
 
         <div style={{ display: 'flex', gap: '12px' }}>
-          <Button variant="primary" icon={Plus} onClick={() => setShowModal(true)} style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}>
+          <Button variant="primary" icon={Plus} onClick={() => setShowModal(true)} style={{ backgroundColor: 'var(--success)', borderColor: 'var(--success)' }}>
             Gerar Nova Chave API
           </Button>
         </div>
@@ -133,55 +133,55 @@ export const ApiKeysPage: React.FC = () => {
       {/* Top Overview Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
         
-        <div className="glass-panel" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', borderColor: '#10b981' }}>
-          <div style={{ width: '56px', height: '56px', borderRadius: '12px', backgroundColor: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
+        <div className="glass-panel" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', borderColor: 'var(--success)' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--success) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)' }}>
             <ShieldCheck size={32} />
           </div>
           <div>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block' }}>Chaves de API Ativas</span>
-            <strong style={{ fontSize: '1.8rem', fontWeight: 700, color: 'white' }}>{activeKeysCount}</strong>
-            <span style={{ fontSize: '0.75rem', color: '#34d399', display: 'block', marginTop: '2px' }}>Tokens em conformidade de segurança</span>
+            <strong style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--text-main)' }}>{activeKeysCount}</strong>
+            <span style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'block', marginTop: '2px' }}>Tokens em conformidade de segurança</span>
           </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', borderColor: '#3b82f6' }}>
-          <div style={{ width: '56px', height: '56px', borderRadius: '12px', backgroundColor: 'rgba(59,130,246,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
+        <div className="glass-panel" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', borderColor: 'var(--primary)' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--info) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
             <Activity size={32} />
           </div>
           <div>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block' }}>Requisições Processadas</span>
-            <strong style={{ fontSize: '1.8rem', fontWeight: 700, color: 'white' }}>{totalRequestsCount}</strong>
-            <span style={{ fontSize: '0.75rem', color: '#60a5fa', display: 'block', marginTop: '2px' }}>Contador cumulativo de integrações</span>
+            <strong style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--text-main)' }}>{totalRequestsCount}</strong>
+            <span style={{ fontSize: '0.75rem', color: 'var(--primary)', display: 'block', marginTop: '2px' }}>Contador cumulativo de integrações</span>
           </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', borderColor: '#a855f7' }}>
-          <div style={{ width: '56px', height: '56px', borderRadius: '12px', backgroundColor: 'rgba(168,85,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a855f7' }}>
+        <div className="glass-panel" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', borderColor: 'var(--primary)' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--primary) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
             <Server size={32} />
           </div>
           <div>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block' }}>Webhook Endpoint</span>
-            <strong style={{ fontSize: '1.2rem', fontWeight: 700, color: '#e9d5ff', display: 'block', marginTop: '4px' }}>Disponível</strong>
-            <span style={{ fontSize: '0.75rem', color: '#c084fc', display: 'block', marginTop: '2px' }}>Assinatura de Segurança HMAC-SHA256</span>
+            <strong style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary)', display: 'block', marginTop: '4px' }}>Disponível</strong>
+            <span style={{ fontSize: '0.75rem', color: 'var(--primary)', display: 'block', marginTop: '2px' }}>Assinatura de Segurança HMAC-SHA256</span>
           </div>
         </div>
 
       </div>
 
       {/* Webhook Endpoint Configuration Panel */}
-      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: '#a855f7' }}>
+      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--primary)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <ExternalLink size={24} style={{ color: '#a855f7' }} />
+            <ExternalLink size={24} style={{ color: 'var(--primary)' }} />
             <div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'white' }}>Endpoint Webhook para Recepção Externa (Ingestion Endpoint)</h3>
-              <span style={{ fontSize: '0.85rem', color: '#d8b4fe' }}>URL dedicada para injetar minutas de notícias e contatos automatizados de CRMs externos</span>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>Endpoint Webhook para Recepção Externa (Ingestion Endpoint)</h3>
+              <span style={{ fontSize: '0.85rem', color: 'var(--primary)' }}>URL dedicada para injetar minutas de notícias e contatos automatizados de CRMs externos</span>
             </div>
           </div>
           <Badge variant="primary">Assinatura HMAC</Badge>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px', backgroundColor: '#090d16', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px', backgroundColor: 'var(--surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Webhook URL (POST)</label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -190,8 +190,8 @@ export const ApiKeysPage: React.FC = () => {
                 readOnly 
                 value={webhookUrl}
                 style={{ 
-                  flex: 1, height: '42px', padding: '0 16px', borderRadius: '8px', backgroundColor: '#0f172a',
-                  border: '1px solid var(--border)', color: '#6ee7b7', fontFamily: 'monospace', fontSize: '0.85rem', outline: 'none'
+                  flex: 1, height: '42px', padding: '0 16px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)', color: 'var(--success)', fontFamily: 'monospace', fontSize: '0.85rem', outline: 'none'
                 }} 
               />
               <Button 
@@ -213,8 +213,8 @@ export const ApiKeysPage: React.FC = () => {
                 readOnly 
                 value={webhookSecret}
                 style={{ 
-                  flex: 1, height: '42px', padding: '0 16px', borderRadius: '8px', backgroundColor: '#0f172a',
-                  border: '1px solid var(--border)', color: '#f472b6', fontFamily: 'monospace', fontSize: '0.85rem', outline: 'none'
+                  flex: 1, height: '42px', padding: '0 16px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)', color: 'var(--error)', fontFamily: 'monospace', fontSize: '0.85rem', outline: 'none'
                 }} 
               />
               <span style={{ alignSelf: 'center', display: 'flex', alignItems: 'center' }}>
@@ -230,25 +230,25 @@ export const ApiKeysPage: React.FC = () => {
       </div>
 
       {/* API Keys Table Panel */}
-      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: '#10b981' }}>
+      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--success)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Code size={24} style={{ color: '#10b981' }} />
+            <Code size={24} style={{ color: 'var(--success)' }} />
             <div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'white' }}>Chaves de Integrações Externas Geradas (API Keys)</h3>
-              <span style={{ fontSize: '0.85rem', color: '#6ee7b7' }}>Lista de credenciais estáticas ativas e revogadas para comunicação de sistemas terceiros</span>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>Chaves de Integrações Externas Geradas (API Keys)</h3>
+              <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>Lista de credenciais estáticas ativas e revogadas para comunicação de sistemas terceiros</span>
             </div>
           </div>
 
-          <Button variant="primary" icon={Plus} onClick={() => setShowModal(true)} style={{ height: '40px', fontSize: '0.85rem', backgroundColor: '#10b981', borderColor: '#10b981' }}>
+          <Button variant="primary" icon={Plus} onClick={() => setShowModal(true)} style={{ height: '40px', fontSize: '0.85rem', backgroundColor: 'var(--success)', borderColor: 'var(--success)' }}>
             Gerar Chave
           </Button>
         </div>
 
-        <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: '#090d16' }}>
+        <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(255,255,255,0.03)', color: '#94a3b8' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '16px 24px', fontWeight: 600 }}>Nome da Integração / Sistema</th>
                 <th style={{ padding: '16px 24px', fontWeight: 600 }}>Token Estático JWT</th>
                 <th style={{ padding: '16px 24px', fontWeight: 600 }}>Escopos de Permissão</th>
@@ -259,17 +259,17 @@ export const ApiKeysPage: React.FC = () => {
             </thead>
             <tbody style={{ borderTop: '1px solid var(--border)' }}>
               {keys.map(item => (
-                <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', opacity: item.status === 'REVOKED' ? 0.5 : 1 }}>
-                  <td style={{ padding: '20px 24px', color: 'white', fontWeight: 700 }}>
+                <tr key={item.id} style={{ borderBottom: '1px solid color-mix(in srgb, var(--border) 30%, transparent)', opacity: item.status === 'REVOKED' ? 0.5 : 1 }}>
+                  <td style={{ padding: '20px 24px', color: 'var(--text-main)', fontWeight: 700 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <Lock size={16} style={{ color: item.status === 'ACTIVE' ? '#10b981' : 'var(--error)' }} />
+                      <Lock size={16} style={{ color: item.status === 'ACTIVE' ? 'var(--success)' : 'var(--error)' }} />
                       <span>{item.name}</span>
                     </div>
                   </td>
 
-                  <td style={{ padding: '20px 24px', fontFamily: 'monospace', color: '#38bdf8', maxWidth: '280px' }}>
+                  <td style={{ padding: '20px 24px', fontFamily: 'monospace', color: 'var(--info)', maxWidth: '280px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: '180px', color: item.status === 'REVOKED' ? '#94a3b8' : '#38bdf8' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: '180px', color: item.status === 'REVOKED' ? 'var(--text-muted)' : 'var(--info)' }}>
                         {item.token}
                       </span>
                       {item.status === 'ACTIVE' && (
@@ -277,7 +277,7 @@ export const ApiKeysPage: React.FC = () => {
                           type="button"
                           onClick={() => handleCopyText(item.token, item.id)}
                           style={{
-                            background: 'none', border: 'none', color: copiedId === item.id ? 'var(--success)' : '#94a3b8',
+                            background: 'none', border: 'none', color: copiedId === item.id ? 'var(--success)' : 'var(--text-muted)',
                             cursor: 'pointer', padding: '4px'
                           }}
                           title="Copiar Token"
@@ -291,20 +291,20 @@ export const ApiKeysPage: React.FC = () => {
                   <td style={{ padding: '20px 24px' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {item.scopes.map(sc => (
-                        <span key={sc} style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: '#e2e8f0' }}>
+                        <span key={sc} style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px', backgroundColor: 'color-mix(in srgb, var(--border) 30%, transparent)', border: '1px solid var(--border)', color: 'var(--text-main)' }}>
                           {sc}
                         </span>
                       ))}
                     </div>
                   </td>
 
-                  <td style={{ padding: '20px 24px', color: '#94a3b8', fontSize: '0.85rem' }}>
+                  <td style={{ padding: '20px 24px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Calendar size={14} /> <span>{item.createdAt}</span>
                     </div>
                   </td>
 
-                  <td style={{ padding: '20px 24px', color: 'white', fontWeight: 600 }}>
+                  <td style={{ padding: '20px 24px', color: 'var(--text-main)', fontWeight: 600 }}>
                     {item.usageCount} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400 }}>reqs</span>
                   </td>
 
@@ -336,11 +336,11 @@ export const ApiKeysPage: React.FC = () => {
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)',
           backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
         }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '36px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: '#10b981' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '36px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--success)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Key size={24} style={{ color: '#10b981' }} />
-                <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'white' }}>Gerar Chave de Integração Externa</h3>
+                <Key size={24} style={{ color: 'var(--success)' }} />
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-main)' }}>Gerar Chave de Integração Externa</h3>
               </div>
               <button type="button" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
             </div>
@@ -355,8 +355,8 @@ export const ApiKeysPage: React.FC = () => {
               />
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Escopos de Acesso Permitidos</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', backgroundColor: '#090d16', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Escopos de Acesso Permitidos</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', backgroundColor: 'var(--surface)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                   {[
                     { id: 'READ_CONTACTS', label: 'Leitura de Contatos' },
                     { id: 'WRITE_CONTACTS', label: 'Cadastro de Contatos' },
@@ -364,12 +364,12 @@ export const ApiKeysPage: React.FC = () => {
                     { id: 'WRITE_DRAFTS', label: 'Criação de Minutas' },
                     { id: 'BROADCAST_TRIGGER', label: 'Disparo de Lotes' }
                   ].map(sc => (
-                    <label key={sc.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'white', cursor: 'pointer', userSelect: 'none' }}>
+                    <label key={sc.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer', userSelect: 'none' }}>
                       <input 
                         type="checkbox" 
                         checked={selectedScopes.includes(sc.id)} 
                         onChange={() => handleToggleScope(sc.id)}
-                        style={{ accentColor: '#10b981', width: '16px', height: '16px', cursor: 'pointer' }}
+                        style={{ accentColor: 'var(--success)', width: '16px', height: '16px', cursor: 'pointer' }}
                       />
                       <span>{sc.label}</span>
                     </label>
@@ -378,13 +378,13 @@ export const ApiKeysPage: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>Regra de Expiração do Token</label>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Regra de Expiração do Token</label>
                 <select 
                   value={expirationRule} 
                   onChange={e => setExpirationRule(e.target.value)}
                   style={{
-                    height: '42px', padding: '0 16px', borderRadius: '8px', backgroundColor: '#090d16',
-                    border: '1px solid var(--border)', color: 'white', fontSize: '0.9rem', cursor: 'pointer', outline: 'none'
+                    height: '42px', padding: '0 16px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.9rem', cursor: 'pointer', outline: 'none'
                   }}
                 >
                   <option value="NEVER">Nunca Expira (Estático Permanente)</option>
@@ -397,7 +397,7 @@ export const ApiKeysPage: React.FC = () => {
                 <Button type="button" variant="secondary" onClick={() => setShowModal(false)} style={{ height: '44px' }}>
                   Cancelar
                 </Button>
-                <Button type="submit" variant="primary" isLoading={isGenerating} style={{ height: '44px', backgroundColor: '#10b981', borderColor: '#10b981', padding: '0 24px' }}>
+                <Button type="submit" variant="primary" isLoading={isGenerating} style={{ height: '44px', backgroundColor: 'var(--success)', borderColor: 'var(--success)', padding: '0 24px' }}>
                   {isGenerating ? 'Assinando Token...' : 'Concluir Geração'}
                 </Button>
               </div>

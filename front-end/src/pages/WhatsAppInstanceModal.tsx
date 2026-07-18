@@ -85,7 +85,10 @@ export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
         break;
       case 'qr':
         setWaState('connecting');
-        if (event.payload?.qrCode) setQrPayload(event.payload.qrCode);
+        {
+          const payload = event.payload as { qrCode?: string } | null;
+          if (payload?.qrCode) setQrPayload(payload.qrCode);
+        }
         restartQrTimer();
         break;
       case 'disconnected':

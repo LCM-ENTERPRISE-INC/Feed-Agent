@@ -144,7 +144,7 @@ export const SystemTelemetryPage: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '20px' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Activity size={32} style={{ color: '#3b82f6' }} />
+            <Activity size={32} style={{ color: 'var(--primary)' }} />
             <span>Visualizador Gráfico de Recursos e Containers</span>
           </h1>
           <p style={{ color: 'var(--text-muted)' }}>Monitoramento em tempo real do Node.js Runtime, latência OCR Tesseract e telemetria de microsserviços</p>
@@ -164,8 +164,8 @@ export const SystemTelemetryPage: React.FC = () => {
             icon={Zap} 
             onClick={handleToggleStressTest} 
             style={{ 
-              backgroundColor: isStressTest ? '#f59e0b' : 'var(--error)', 
-              borderColor: isStressTest ? '#f59e0b' : 'var(--error)' 
+              backgroundColor: isStressTest ? 'var(--warning)' : 'var(--error)', 
+              borderColor: isStressTest ? 'var(--warning)' : 'var(--error)' 
             }}
           >
             {isStressTest ? 'Parar Stress Test' : 'Simular Estouro de Memória'}
@@ -178,26 +178,26 @@ export const SystemTelemetryPage: React.FC = () => {
         <div style={{
           padding: '24px 32px',
           borderRadius: '16px',
-          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+          backgroundColor: 'color-mix(in srgb, var(--error) 15%, transparent)',
           border: '2px solid var(--error)',
-          color: 'white',
+          color: 'var(--text-main)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '16px',
           animation: 'pulse-border 1.5s infinite',
-          boxShadow: '0 0 30px rgba(239, 68, 68, 0.3)'
+          boxShadow: '0 0 30px color-mix(in srgb, var(--error) 30%, transparent)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'rgba(239, 68, 68, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'color-mix(in srgb, var(--error) 30%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)' }}>
               <AlertTriangle size={28} style={{ animation: 'pulse 1s infinite' }} />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#fca5a5' }}>
+              <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--error)' }}>
                 [CRITICAL ALERT] Estouro de Memória Heap Detectado ({ramPct}%)
               </h3>
-              <p style={{ fontSize: '0.9rem', color: '#fee2e2', marginTop: '4px' }}>
+              <p style={{ fontSize: '0.9rem', color: 'var(--error)', marginTop: '4px' }}>
                 O consumo do processo Node.js ultrapassou a barreira de segurança ({ramUsageMb}MB / 1024MB). O Garbage Collector V8 iniciou coletas de emergência para evitar reinicialização do container.
               </p>
             </div>
@@ -213,27 +213,27 @@ export const SystemTelemetryPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
         
         {/* Memory Tracker */}
-        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: isRamCritical ? 'var(--error)' : '#3b82f6', transition: 'border-color 0.3s' }}>
+        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: isRamCritical ? 'var(--error)' : 'var(--info)', transition: 'border-color 0.3s' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Server size={18} style={{ color: isRamCritical ? 'var(--error)' : '#3b82f6' }} />
+            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Server size={18} style={{ color: isRamCritical ? 'var(--error)' : 'var(--info)' }} />
               <span>Memória Heap (Node.js Container)</span>
             </span>
             <Badge variant={isRamCritical ? 'error' : 'primary'}>{ramPct}% Ocupado</Badge>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{ fontSize: '2.5rem', fontWeight: 700, color: isRamCritical ? 'var(--error)' : '#60a5fa', fontFamily: 'monospace' }}>
+            <span style={{ fontSize: '2.5rem', fontWeight: 700, color: isRamCritical ? 'var(--error)' : 'var(--info)', fontFamily: 'monospace' }}>
               {ramUsageMb} MB
             </span>
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/ {maxHeapMb} MB</span>
           </div>
 
-          <div style={{ width: '100%', height: '14px', borderRadius: '7px', backgroundColor: '#1e293b', overflow: 'hidden', position: 'relative' }}>
+          <div style={{ width: '100%', height: '14px', borderRadius: '7px', backgroundColor: 'var(--surface)', overflow: 'hidden', position: 'relative' }}>
             <div 
               style={{ 
                 height: '100%', width: `${ramPct}%`, 
-                backgroundColor: isRamCritical ? 'var(--error)' : '#3b82f6', 
+                backgroundColor: isRamCritical ? 'var(--error)' : 'var(--info)', 
                 transition: 'width 0.4s ease-out, background-color 0.3s' 
               }} 
             />
@@ -245,27 +245,27 @@ export const SystemTelemetryPage: React.FC = () => {
         </div>
 
         {/* CPU Tracker */}
-        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: cpuUsagePct > 80 ? 'var(--error)' : '#10b981', transition: 'border-color 0.3s' }}>
+        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: cpuUsagePct > 80 ? 'var(--error)' : 'var(--success)', transition: 'border-color 0.3s' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Cpu size={18} style={{ color: cpuUsagePct > 80 ? 'var(--error)' : '#10b981' }} />
+            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Cpu size={18} style={{ color: cpuUsagePct > 80 ? 'var(--error)' : 'var(--success)' }} />
               <span>Processamento de CPU (vCPUs)</span>
             </span>
             <Badge variant={cpuUsagePct > 80 ? 'error' : 'success'}>{cpuUsagePct > 80 ? 'Sobrecarga' : 'Estável'}</Badge>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{ fontSize: '2.5rem', fontWeight: 700, color: cpuUsagePct > 80 ? 'var(--error)' : '#34d399', fontFamily: 'monospace' }}>
+            <span style={{ fontSize: '2.5rem', fontWeight: 700, color: cpuUsagePct > 80 ? 'var(--error)' : 'var(--success)', fontFamily: 'monospace' }}>
               {cpuUsagePct}%
             </span>
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>de 4 Núcleos</span>
           </div>
 
-          <div style={{ width: '100%', height: '14px', borderRadius: '7px', backgroundColor: '#1e293b', overflow: 'hidden', position: 'relative' }}>
+          <div style={{ width: '100%', height: '14px', borderRadius: '7px', backgroundColor: 'var(--surface)', overflow: 'hidden', position: 'relative' }}>
             <div 
               style={{ 
                 height: '100%', width: `${cpuUsagePct}%`, 
-                backgroundColor: cpuUsagePct > 80 ? 'var(--error)' : '#10b981', 
+                backgroundColor: cpuUsagePct > 80 ? 'var(--error)' : 'var(--success)', 
                 transition: 'width 0.4s ease-out, background-color 0.3s' 
               }} 
             />
@@ -277,30 +277,30 @@ export const SystemTelemetryPage: React.FC = () => {
         </div>
 
         {/* Database & Storage Trackers */}
-        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '16px', borderColor: '#a855f7' }}>
+        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '16px', borderColor: 'var(--primary)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Database size={18} style={{ color: '#a855f7' }} />
+            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Database size={18} style={{ color: 'var(--primary)' }} />
               <span>Pool de Conexões e Cache</span>
             </span>
             <Badge variant="primary">Conectado</Badge>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div style={{ backgroundColor: '#090d16', padding: '16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+            <div style={{ backgroundColor: 'var(--surface)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>PostgreSQL Pool</span>
-              <strong style={{ fontSize: '1.25rem', color: 'white', fontFamily: 'monospace' }}>12 / 20</strong>
-              <span style={{ fontSize: '0.7rem', color: '#10b981', display: 'block', marginTop: '2px' }}>Conexões Ativas</span>
+              <strong style={{ fontSize: '1.25rem', color: 'var(--text-main)', fontFamily: 'monospace' }}>12 / 20</strong>
+              <span style={{ fontSize: '0.7rem', color: 'var(--success)', display: 'block', marginTop: '2px' }}>Conexões Ativas</span>
             </div>
 
-            <div style={{ backgroundColor: '#090d16', padding: '16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+            <div style={{ backgroundColor: 'var(--surface)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Redis Hit Rate</span>
-              <strong style={{ fontSize: '1.25rem', color: '#c084fc', fontFamily: 'monospace' }}>98.4%</strong>
-              <span style={{ fontSize: '0.7rem', color: '#c084fc', display: 'block', marginTop: '2px' }}>Cluster Sentinel</span>
+              <strong style={{ fontSize: '1.25rem', color: 'var(--primary)', fontFamily: 'monospace' }}>98.4%</strong>
+              <span style={{ fontSize: '0.7rem', color: 'var(--primary)', display: 'block', marginTop: '2px' }}>Cluster Sentinel</span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#94a3b8' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             <CheckCircle2 size={15} style={{ color: 'var(--success)' }} />
             <span>Disco de Uploads: 42GB livres de 100GB</span>
           </div>
@@ -312,31 +312,31 @@ export const SystemTelemetryPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', gap: '32px' }}>
         
         {/* OCR Tesseract Latency Bar Chart */}
-        <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: '#f59e0b' }}>
+        <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--warning)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <FileUp size={22} style={{ color: '#f59e0b' }} />
+              <FileUp size={22} style={{ color: 'var(--warning)' }} />
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Latência do Motor OCR (Tesseract V5)</h3>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Latência do Motor OCR (Tesseract V5)</h3>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Tempo de processamento de extração de texto por lote (segundos)</span>
               </div>
             </div>
             <Badge variant="warning">Tesseract Runtime</Badge>
           </div>
 
-          <div style={{ height: '300px', width: '100%', backgroundColor: '#030712', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <div style={{ height: '300px', width: '100%', backgroundColor: 'var(--background)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ocrData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                <XAxis dataKey="batch" stroke="#9ca3af" fontSize={12} tickLine={false} />
-                <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} unit="s" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="batch" stroke="var(--text-muted)" fontSize={12} tickLine={false} />
+                <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} unit="s" />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '8px', color: 'white', fontSize: '0.85rem' }} 
-                  itemStyle={{ color: '#fbbf24' }} 
-                  formatter={(value: any) => [`${value} segundos`, 'Latência OCR']}
+                  contentStyle={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '0.85rem' }} 
+                  itemStyle={{ color: 'var(--warning)' }} 
+                  formatter={(value) => [`${value} segundos`, 'Latência OCR']}
                 />
                 <Legend wrapperStyle={{ fontSize: '0.85rem', paddingTop: '10px' }} />
-                <Bar dataKey="tesseractLatencySec" name="Tempo de Execução (s)" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="tesseractLatencySec" name="Tempo de Execução (s)" fill="var(--warning)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -348,31 +348,31 @@ export const SystemTelemetryPage: React.FC = () => {
         </div>
 
         {/* API Gateway Request Latency Line Chart */}
-        <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: '#10b981' }}>
+        <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--success)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <BarChart2 size={22} style={{ color: '#10b981' }} />
+              <BarChart2 size={22} style={{ color: 'var(--success)' }} />
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Latência Média de Requisições (API Gateway)</h3>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Latência Média de Requisições (API Gateway)</h3>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Tempo de resposta HTTP das rotas do Back-end (milissegundos)</span>
               </div>
             </div>
             <Badge variant="success">Express/Node.js</Badge>
           </div>
 
-          <div style={{ height: '300px', width: '100%', backgroundColor: '#030712', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <div style={{ height: '300px', width: '100%', backgroundColor: 'var(--background)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={apiData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} />
-                <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} unit="ms" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={12} tickLine={false} />
+                <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} unit="ms" />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '8px', color: 'white', fontSize: '0.85rem' }} 
-                  itemStyle={{ color: '#34d399' }} 
-                  formatter={(value: any) => [`${value} ms`, 'Latência API']}
+                  contentStyle={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '0.85rem' }} 
+                  itemStyle={{ color: 'var(--success)' }} 
+                  formatter={(value) => [`${value} ms`, 'Latência API']}
                 />
                 <Legend wrapperStyle={{ fontSize: '0.85rem', paddingTop: '10px' }} />
-                <Line type="monotone" dataKey="latencyMs" name="Tempo de Resposta (ms)" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981' }} activeDot={{ r: 8 }} />
+                <Line type="monotone" dataKey="latencyMs" name="Tempo de Resposta (ms)" stroke="var(--success)" strokeWidth={3} dot={{ r: 4, fill: 'var(--success)' }} activeDot={{ r: 8 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

@@ -4,7 +4,7 @@ import { Mail, Lock, Key, ArrowLeft, RefreshCw, CheckCircle2, ShieldCheck } from
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { showToast } from '@/utils/toastHelper';
-import { getPasswordStrength } from './Register';
+import { getPasswordStrength } from '@/utils/passwordStrength';
 import '@/styles/login.css';
 
 export const ForgotPassword: React.FC = () => {

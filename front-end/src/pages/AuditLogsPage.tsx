@@ -37,7 +37,6 @@ export const AuditLogsPage: React.FC = () => {
   // Filtering states
   const [searchRegex, setSearchRegex] = useState<string>('');
   const [levelFilter, setLevelFilter] = useState<string>('ALL');
-  const [regexError, setRegexError] = useState<string | null>(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -53,20 +52,20 @@ export const AuditLogsPage: React.FC = () => {
     }, 1200);
   };
 
-  // Filter logs based on Level and Regex search
-  const filteredLogs = useMemo(() => {
-    setRegexError(null);
+  // Filter logs based on Level and Regex search (derive regexError — no setState in useMemo)
+  const { filteredLogs, regexError } = useMemo(() => {
     let rx: RegExp | null = null;
+    let error: string | null = null;
 
     if (searchRegex.trim()) {
       try {
         rx = new RegExp(searchRegex, 'i');
-      } catch (err) {
-        setRegexError('Expressão Regular (Regex) com sintaxe incompleta ou inválida.');
+      } catch {
+        error = 'Expressão Regular (Regex) com sintaxe incompleta ou inválida.';
       }
     }
 
-    return logs.filter(log => {
+    const filtered = logs.filter(log => {
       // Level filter
       if (levelFilter !== 'ALL' && log.level !== levelFilter) {
         return false;
@@ -82,6 +81,8 @@ export const AuditLogsPage: React.FC = () => {
 
       return true;
     });
+
+    return { filteredLogs: filtered, regexError: error };
   }, [logs, searchRegex, levelFilter]);
 
   // Pagination calculation
@@ -91,9 +92,10 @@ export const AuditLogsPage: React.FC = () => {
     return filteredLogs.slice(start, start + itemsPerPage);
   }, [filteredLogs, currentPage, itemsPerPage]);
 
-  // Reset page to 1 when filters change
+  // Reset page to 1 when filters change (defer to avoid cascading setState in effect)
   React.useEffect(() => {
-    setCurrentPage(1);
+    const boot = window.setTimeout(() => setCurrentPage(1), 0);
+    return () => window.clearTimeout(boot);
   }, [searchRegex, levelFilter, itemsPerPage]);
 
   // Sprint 42: Export JSON Audit Report
@@ -133,7 +135,7 @@ export const AuditLogsPage: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '20px' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <ShieldAlert size={32} style={{ color: '#a855f7' }} />
+            <ShieldAlert size={32} style={{ color: 'var(--primary)' }} />
             <span>Console de Monitoramento de Logs do Servidor (Audit Log)</span>
           </h1>
           <p style={{ color: 'var(--text-muted)' }}>Leitura e auditoria administrativa avançada com suporte a expressões regulares (Regex) e exportação JSON</p>
@@ -144,7 +146,7 @@ export const AuditLogsPage: React.FC = () => {
             Sincronizar Syslog
           </Button>
 
-          <Button variant="primary" icon={FileJson} onClick={handleExportJson} style={{ backgroundColor: '#a855f7', borderColor: '#a855f7' }}>
+          <Button variant="primary" icon={FileJson} onClick={handleExportJson} style={{ backgroundColor: 'var(--primary)', borderColor: 'var(--primary)' }}>
             Exportar Logs em JSON
           </Button>
         </div>
@@ -154,11 +156,11 @@ export const AuditLogsPage: React.FC = () => {
       <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', borderColor: 'var(--border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Filter size={20} style={{ color: '#a855f7' }} />
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'white' }}>Filtros de Auditoria & Pesquisa Regex</h3>
+            <Filter size={20} style={{ color: 'var(--primary)' }} />
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)' }}>Filtros de Auditoria & Pesquisa Regex</h3>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', backgroundColor: '#090d16', padding: '4px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', gap: '8px', backgroundColor: 'var(--surface)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border)' }}>
             {['ALL', 'INFO', 'WARNING', 'ERROR', 'SECURITY'].map(lvl => (
               <button
                 key={lvl}
@@ -167,8 +169,8 @@ export const AuditLogsPage: React.FC = () => {
                 style={{
                   padding: '6px 14px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
                   border: 'none', transition: 'all 0.2s',
-                  backgroundColor: levelFilter === lvl ? (lvl === 'SECURITY' ? '#a855f7' : lvl === 'ERROR' ? 'var(--error)' : lvl === 'WARNING' ? '#eab308' : 'var(--primary)') : 'transparent',
-                  color: levelFilter === lvl ? 'white' : 'var(--text-muted)'
+                  backgroundColor: levelFilter === lvl ? (lvl === 'SECURITY' ? 'var(--primary)' : lvl === 'ERROR' ? 'var(--error)' : lvl === 'WARNING' ? 'var(--warning)' : 'var(--primary)') : 'transparent',
+                  color: levelFilter === lvl ? 'var(--primary-ink)' : 'var(--text-muted)'
                 }}
               >
                 {lvl === 'ALL' ? 'Todos os Níveis' : lvl === 'SECURITY' ? 'Segurança' : lvl}
@@ -189,7 +191,7 @@ export const AuditLogsPage: React.FC = () => {
               placeholder="Pesquisar por usuário, IP ou Expressão Regular (ex: ^superadmin|DELETE|192\.168\..*)..."
               style={{
                 width: '100%', height: '44px', paddingLeft: '44px', paddingRight: '16px', borderRadius: '8px',
-                backgroundColor: '#090d16', border: `1px solid ${regexError ? 'var(--error)' : 'var(--border)'}`, color: 'white',
+                backgroundColor: 'var(--surface)', border: `1px solid ${regexError ? 'var(--error)' : 'var(--border)'}`, color: 'var(--text-main)',
                 fontSize: '0.9rem', outline: 'none', fontFamily: searchRegex ? 'monospace' : 'var(--font-sans)'
               }}
             />
@@ -201,8 +203,8 @@ export const AuditLogsPage: React.FC = () => {
               value={itemsPerPage}
               onChange={e => setItemsPerPage(Number(e.target.value))}
               style={{
-                height: '44px', padding: '0 12px', borderRadius: '8px', backgroundColor: '#090d16',
-                border: '1px solid var(--border)', color: 'white', fontSize: '0.85rem', cursor: 'pointer', outline: 'none'
+                height: '44px', padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.85rem', cursor: 'pointer', outline: 'none'
               }}
             >
               <option value="5">5 logs / pág</option>
@@ -213,7 +215,7 @@ export const AuditLogsPage: React.FC = () => {
         </div>
 
         {regexError && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--error)', fontSize: '0.8rem', backgroundColor: 'rgba(239,68,68,0.1)', padding: '8px 12px', borderRadius: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--error)', fontSize: '0.8rem', backgroundColor: 'color-mix(in srgb, var(--error) 10%, transparent)', padding: '8px 12px', borderRadius: '6px' }}>
             <AlertTriangle size={16} />
             <span>{regexError}</span>
           </div>
@@ -221,11 +223,11 @@ export const AuditLogsPage: React.FC = () => {
       </div>
 
       {/* Main Audit Table Section */}
-      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: '#a855f7' }}>
+      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--primary)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Terminal size={22} style={{ color: '#a855f7' }} />
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'white' }}>Registros do Sistema (Audit Trail)</h3>
+            <Terminal size={22} style={{ color: 'var(--primary)' }} />
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>Registros do Sistema (Audit Trail)</h3>
           </div>
 
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -233,10 +235,10 @@ export const AuditLogsPage: React.FC = () => {
           </span>
         </div>
 
-        <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: '#090d16' }}>
+        <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(255,255,255,0.03)', color: '#94a3b8' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '16px 20px', fontWeight: 600 }}>Data / Hora</th>
                 <th style={{ padding: '16px 20px', fontWeight: 600 }}>Usuário / Operador</th>
                 <th style={{ padding: '16px 20px', fontWeight: 600 }}>Ação Executada</th>
@@ -250,35 +252,35 @@ export const AuditLogsPage: React.FC = () => {
                 <tr>
                   <td colSpan={6} style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     <Info size={32} style={{ margin: '0 auto 12px auto', opacity: 0.5 }} />
-                    <p style={{ fontSize: '1rem', fontWeight: 600, color: '#e2e8f0' }}>Nenhum log de auditoria encontrado</p>
+                    <p style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)' }}>Nenhum log de auditoria encontrado</p>
                     <span style={{ fontSize: '0.8rem' }}>Tente redefinir os filtros de nível ou limpar a string de busca Regex.</span>
                   </td>
                 </tr>
               ) : (
                 paginatedLogs.map((log) => (
                   <React.Fragment key={log.id}>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.02)', backgroundColor: log.level === 'SECURITY' ? 'rgba(168,85,247,0.03)' : log.level === 'ERROR' ? 'rgba(239,68,68,0.03)' : 'transparent' }}>
-                      <td style={{ padding: '16px 20px', color: '#cbd5e1', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <tr style={{ borderBottom: '1px solid color-mix(in srgb, var(--border) 15%, transparent)', backgroundColor: log.level === 'SECURITY' ? 'color-mix(in srgb, var(--primary) 3%, transparent)' : log.level === 'ERROR' ? 'color-mix(in srgb, var(--error) 3%, transparent)' : 'transparent' }}>
+                      <td style={{ padding: '16px 20px', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Clock size={14} style={{ color: 'var(--text-muted)' }} />
                         <span>{log.timestamp}</span>
                       </td>
 
-                      <td style={{ padding: '16px 20px', color: 'white', fontWeight: 700 }}>
+                      <td style={{ padding: '16px 20px', color: 'var(--text-main)', fontWeight: 700 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <User size={14} style={{ color: 'var(--primary)' }} />
                           <span>{log.user}</span>
                         </div>
                       </td>
 
-                      <td style={{ padding: '16px 20px', fontFamily: 'monospace', color: '#38bdf8', fontWeight: 600 }}>
+                      <td style={{ padding: '16px 20px', fontFamily: 'monospace', color: 'var(--info)', fontWeight: 600 }}>
                         {log.action}
                       </td>
 
-                      <td style={{ padding: '16px 20px', color: '#e2e8f0' }}>
+                      <td style={{ padding: '16px 20px', color: 'var(--text-main)' }}>
                         {log.resource}
                       </td>
 
-                      <td style={{ padding: '16px 20px', fontFamily: 'monospace', color: '#94a3b8' }}>
+                      <td style={{ padding: '16px 20px', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
                         {log.ip}
                       </td>
 
@@ -288,10 +290,10 @@ export const AuditLogsPage: React.FC = () => {
                     </tr>
                     
                     {/* Log Details Sub-row */}
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: 'rgba(0,0,0,0.2)' }}>
-                      <td colSpan={6} style={{ padding: '10px 20px 14px 44px', color: '#94a3b8', fontSize: '0.8rem', lineHeight: 1.5 }}>
-                        <span style={{ color: '#64748b', fontWeight: 600, marginRight: '8px' }}>Detalhes do Evento:</span>
-                        <span style={{ color: log.level === 'ERROR' ? '#fca5a5' : log.level === 'SECURITY' ? '#e9d5ff' : '#cbd5e1' }}>{log.details}</span>
+                    <tr style={{ borderBottom: '1px solid color-mix(in srgb, var(--border) 35%, transparent)', backgroundColor: 'color-mix(in srgb, var(--surface) 20%, transparent)' }}>
+                      <td colSpan={6} style={{ padding: '10px 20px 14px 44px', color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.5 }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 600, marginRight: '8px' }}>Detalhes do Evento:</span>
+                        <span style={{ color: log.level === 'ERROR' ? 'var(--error)' : log.level === 'SECURITY' ? 'var(--primary)' : 'var(--text-disabled)' }}>{log.details}</span>
                       </td>
                     </tr>
                   </React.Fragment>
@@ -304,7 +306,7 @@ export const AuditLogsPage: React.FC = () => {
         {/* Robust Pagination Controls */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', paddingTop: '8px' }}>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Mostrando página <strong style={{ color: 'white' }}>{currentPage}</strong> de <strong style={{ color: 'white' }}>{totalPages}</strong>
+            Mostrando página <strong style={{ color: 'var(--text-main)' }}>{currentPage}</strong> de <strong style={{ color: 'var(--text-main)' }}>{totalPages}</strong>
           </div>
 
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -329,8 +331,8 @@ export const AuditLogsPage: React.FC = () => {
                     style={{
                       width: '38px', height: '38px', borderRadius: '8px', fontWeight: 700, fontSize: '0.85rem',
                       border: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.2s',
-                      backgroundColor: currentPage === pageNum ? '#a855f7' : '#090d16',
-                      color: currentPage === pageNum ? 'white' : 'var(--text-muted)'
+                      backgroundColor: currentPage === pageNum ? 'var(--primary)' : 'var(--surface)',
+                      color: currentPage === pageNum ? 'var(--primary-ink)' : 'var(--text-muted)'
                     }}
                   >
                     {pageNum}

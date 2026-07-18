@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, LogIn, MessageSquareCode } from 'lucide-react';
+import axios from 'axios';
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { useAuthStore } from '@/store/authStore';
@@ -64,8 +65,10 @@ export const Login: React.FC = () => {
         setError(res.data?.error || 'Falha na autenticação.');
         showToast.error('Falha na autenticação.');
       }
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Credenciais inválidas ou erro no servidor.';
+    } catch (err: unknown) {
+      const errorMsg = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error || 'Credenciais inválidas ou erro no servidor.'
+        : 'Credenciais inválidas ou erro no servidor.';
       setError(errorMsg);
       showToast.error(errorMsg);
     } finally {

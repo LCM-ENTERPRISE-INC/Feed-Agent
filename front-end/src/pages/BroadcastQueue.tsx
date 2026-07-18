@@ -101,7 +101,7 @@ export const BroadcastQueue: React.FC = () => {
         if (res.data?.success) {
            setHistoricalBatches(res.data.data.history || []);
         }
-      } catch (err) {
+      } catch {
         showToast.error('Erro ao buscar histórico de lotes.');
       }
     };
@@ -330,7 +330,7 @@ export const BroadcastQueue: React.FC = () => {
                 Retomar Fila (Resume)
               </Button>
             ) : (
-              <Button type="button" variant="secondary" icon={Pause} onClick={handleTogglePauseQueue} style={{ borderColor: '#eab308', color: '#eab308' }}>
+              <Button type="button" variant="secondary" icon={Pause} onClick={handleTogglePauseQueue} style={{ borderColor: 'var(--warning)', color: 'var(--warning)' }}>
                 Pausar Fila (Pause)
               </Button>
             )}
@@ -341,19 +341,19 @@ export const BroadcastQueue: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#090d16', padding: '28px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: 'var(--surface)', padding: '28px', borderRadius: '16px', border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '1rem', fontWeight: 700, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={18} style={{ color: 'var(--primary)' }} />
               <span>Progresso de Disparo: <strong style={{ color: 'var(--success)', fontSize: '1.2rem' }}>{progressPercentage}%</strong></span>
             </span>
 
-            <span style={{ fontSize: '0.9rem', color: '#94a3b8', fontWeight: 600 }}>
+            <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 600 }}>
               {processedJobsCount} de {totalTrackableJobs} Mensagens Processadas
             </span>
           </div>
 
-          <div style={{ width: '100%', height: '24px', borderRadius: '12px', backgroundColor: '#1e293b', overflow: 'hidden', position: 'relative', boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.5)' }}>
+          <div style={{ width: '100%', height: '24px', borderRadius: '12px', backgroundColor: 'var(--surface)', overflow: 'hidden', position: 'relative', boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.5)' }}>
             <div 
               style={{ 
                 height: '100%', width: `${progressPercentage}%`, 
@@ -372,7 +372,7 @@ export const BroadcastQueue: React.FC = () => {
               <CheckCircle size={20} style={{ color: 'var(--success)' }} />
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sucessos:</span>
-                <strong style={{ fontSize: '1.2rem', color: 'white' }}>{completedCount}</strong>
+                <strong style={{ fontSize: '1.2rem', color: 'var(--text-main)' }}>{completedCount}</strong>
               </div>
             </div>
 
@@ -385,18 +385,18 @@ export const BroadcastQueue: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Layers size={20} style={{ color: '#3b82f6' }} />
+              <Layers size={20} style={{ color: 'var(--primary)' }} />
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Restantes na Fila:</span>
-                <strong style={{ fontSize: '1.2rem', color: '#3b82f6' }}>{queuedCount + processingCount}</strong>
+                <strong style={{ fontSize: '1.2rem', color: 'var(--primary)' }}>{queuedCount + processingCount}</strong>
               </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Activity size={20} style={{ color: '#eab308' }} />
+              <Activity size={20} style={{ color: 'var(--warning)' }} />
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Status da Esteira:</span>
-                <strong style={{ fontSize: '1rem', color: isQueuePaused ? '#eab308' : 'var(--success)' }}>
+                <strong style={{ fontSize: '1rem', color: isQueuePaused ? 'var(--warning)' : 'var(--success)' }}>
                   {isQueuePaused ? 'PAUSADA' : 'TRANSMITINDO'}
                 </strong>
               </div>
@@ -412,7 +412,7 @@ export const BroadcastQueue: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Layers size={22} style={{ color: 'var(--primary)' }} />
             <div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Seleção de Contatos para o Lote</h3>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Seleção de Contatos para o Lote</h3>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Selecione quem irá receber todas as minutas aprovadas.</span>
             </div>
           </div>
@@ -431,7 +431,7 @@ export const BroadcastQueue: React.FC = () => {
             <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', gridColumn: '1 / -1' }}>Nenhum contato encontrado ou carregando...</div>
           ) : (
             contacts.map(contact => (
-              <label key={contact.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', backgroundColor: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <label key={contact.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', backgroundColor: 'color-mix(in srgb, var(--border) 15%, transparent)', padding: '10px', borderRadius: '8px', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
                 <input 
                   type="checkbox" 
                   checked={selectedContactIds.includes(contact.id)}
@@ -442,7 +442,7 @@ export const BroadcastQueue: React.FC = () => {
                   style={{ accentColor: 'var(--primary)', width: '18px', height: '18px', cursor: 'pointer' }}
                 />
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '0.9rem', color: 'white', fontWeight: 600 }}>{contact.name}</span>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 600 }}>{contact.name}</span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{contact.phoneNumber}</span>
                 </div>
               </label>
@@ -462,21 +462,21 @@ export const BroadcastQueue: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Sliders size={24} style={{ color: 'var(--primary)' }} />
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Controle de Lançamento de Lote</h3>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Controle de Lançamento de Lote</h3>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Ajuste de intervalo antispam e volume de transmissão</span>
               </div>
             </div>
             <Badge variant="primary">BullMQ Cluster</Badge>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: '#090d16', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'var(--surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ fontSize: '0.9rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Clock size={16} style={{ color: 'var(--primary)' }} />
                   <span>Delay Entre Mensagens (Proteção Antispam)</span>
                 </label>
-                <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)', backgroundColor: 'rgba(99,102,241,0.15)', padding: '4px 12px', borderRadius: '20px', border: '1px solid rgba(99,102,241,0.3)' }}>
+                <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)', backgroundColor: 'color-mix(in srgb, var(--primary) 15%, transparent)', padding: '4px 12px', borderRadius: '20px', border: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)' }}>
                   {delaySeconds} segundos
                 </span>
               </div>
@@ -489,7 +489,7 @@ export const BroadcastQueue: React.FC = () => {
                 value={delaySeconds} 
                 onChange={e => setDelaySeconds(parseFloat(e.target.value))}
                 style={{
-                  width: '100%', height: '8px', borderRadius: '4px', backgroundColor: '#1e293b',
+                  width: '100%', height: '8px', borderRadius: '4px', backgroundColor: 'var(--surface)',
                   accentColor: 'var(--primary)', cursor: 'pointer'
                 }}
               />
@@ -505,8 +505,8 @@ export const BroadcastQueue: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Contatos Selecionados</label>
                 <div style={{
-                    height: '40px', padding: '0 12px', borderRadius: '8px', backgroundColor: '#0f172a',
-                    border: '1px solid var(--border)', color: 'white', fontSize: '1.1rem', fontWeight: 700,
+                    height: '40px', padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 700,
                     display: 'flex', alignItems: 'center'
                   }}>
                   {selectedContactIds.length}
@@ -515,7 +515,7 @@ export const BroadcastQueue: React.FC = () => {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Tempo Estimado Total</span>
-                <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <FastForward size={18} />
                   <span>{estimatedMinutes}m {estimatedRemainderSeconds}s</span>
                 </span>
@@ -527,7 +527,7 @@ export const BroadcastQueue: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Smartphone size={16} /> <span>Celular do Administrador (Disparo de Teste)</span>
                 </label>
                 <input 
@@ -536,8 +536,8 @@ export const BroadcastQueue: React.FC = () => {
                   onChange={e => setAdminTestPhone(e.target.value)}
                   placeholder="+55 11 99999-8888"
                   style={{
-                    height: '42px', padding: '0 16px', borderRadius: '8px', backgroundColor: '#0f172a',
-                    border: '1px solid var(--border)', color: 'white', fontSize: '0.9rem', outline: 'none'
+                    height: '42px', padding: '0 16px', borderRadius: '8px', backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.9rem', outline: 'none'
                   }}
                 />
               </div>
@@ -558,9 +558,9 @@ export const BroadcastQueue: React.FC = () => {
         <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Server size={24} style={{ color: '#10b981' }} />
+              <Server size={24} style={{ color: 'var(--success)' }} />
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Métricas do Cluster de Fila</h3>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Métricas do Cluster de Fila</h3>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Status de entrega e telemetria Redis em tempo real</span>
               </div>
             </div>
@@ -568,35 +568,35 @@ export const BroadcastQueue: React.FC = () => {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: '#090d16', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><Layers size={16} style={{ color: '#3b82f6' }} /> Em Espera</span>
-              <span style={{ fontSize: '2rem', fontWeight: 700, color: '#3b82f6' }}>{queuedCount}</span>
+            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><Layers size={16} style={{ color: 'var(--primary)' }} /> Em Espera</span>
+              <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--primary)' }}>{queuedCount}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Aguardando worker Redis</span>
             </div>
 
-            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: '#090d16', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><Activity size={16} style={{ color: '#eab308' }} /> Processando</span>
-              <span style={{ fontSize: '2rem', fontWeight: 700, color: '#eab308' }}>{processingCount}</span>
+            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><Activity size={16} style={{ color: 'var(--warning)' }} /> Processando</span>
+              <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--warning)' }}>{processingCount}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Consumindo API WhatsApp</span>
             </div>
 
-            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: '#090d16', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={16} style={{ color: '#10b981' }} /> Disparados</span>
-              <span style={{ fontSize: '2rem', fontWeight: 700, color: '#10b981' }}>{completedCount}</span>
+            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={16} style={{ color: 'var(--success)' }} /> Disparados</span>
+              <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--success)' }}>{completedCount}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Entrega confirmada</span>
             </div>
 
-            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: '#090d16', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><ShieldAlert size={16} style={{ color: 'var(--error)' }} /> Falhas/Cancelados</span>
               <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--error)' }}>{failedCount + cancelledCount}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Retentativas / Abortos</span>
             </div>
           </div>
 
-          <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem', color: '#cbd5e1' }}>
-            <span style={{ fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '6px' }}><Activity size={16} style={{ color: 'var(--primary)' }} /> Cluster BullMQ Config:</span>
-            <span style={{ fontFamily: 'monospace', color: '#6ee7b7' }}>[INFO] Worker conectado. Concorrência: 1 job por vez.</span>
-            <span style={{ fontFamily: 'monospace', color: '#93c5fd' }}>[CONFIG] Cadência: {delaySeconds}s de delay entre pacotes.</span>
+          <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', border: '1px solid color-mix(in srgb, var(--border) 40%, transparent)', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            <span style={{ fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}><Activity size={16} style={{ color: 'var(--primary)' }} /> Cluster BullMQ Config:</span>
+            <span style={{ fontFamily: 'monospace', color: 'var(--success)' }}>[INFO] Worker conectado. Concorrência: 1 job por vez.</span>
+            <span style={{ fontFamily: 'monospace', color: 'var(--info)' }}>[CONFIG] Cadência: {delaySeconds}s de delay entre pacotes.</span>
           </div>
         </div>
 
@@ -608,15 +608,15 @@ export const BroadcastQueue: React.FC = () => {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--error) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)' }}>
               <ShieldAlert size={24} />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span>Falhas no Envio Atual (Diagnostic & Retry Hub)</span>
                 <Badge variant="error">{failedJobsList.length} falhas detectadas</Badge>
               </h3>
-              <span style={{ fontSize: '0.85rem', color: '#fca5a5' }}>Inspeção diagnóstica de conectividade e gatilhos de retentativa individual</span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--error)' }}>Inspeção diagnóstica de conectividade e gatilhos de retentativa individual</span>
             </div>
           </div>
 
@@ -637,9 +637,9 @@ export const BroadcastQueue: React.FC = () => {
         {/* Failed Jobs Diagnostic Grid */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {failedJobsList.length === 0 ? (
-            <div style={{ padding: '42px 20px', textAlign: 'center', backgroundColor: '#090d16', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+            <div style={{ padding: '42px 20px', textAlign: 'center', backgroundColor: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
               <CheckCircle2 size={36} style={{ color: 'var(--success)', margin: '0 auto 12px auto' }} />
-              <p style={{ fontSize: '1.05rem', fontWeight: 600, color: 'white' }}>Nenhuma falha detectada no lote de transmissão atual!</p>
+              <p style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)' }}>Nenhuma falha detectada no lote de transmissão atual!</p>
               <span style={{ fontSize: '0.85rem' }}>Todos os destinatários processados até o momento foram confirmados com sucesso.</span>
             </div>
           ) : (
@@ -648,23 +648,23 @@ export const BroadcastQueue: React.FC = () => {
                 key={job.id} 
                 style={{ 
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', 
-                  borderRadius: '12px', backgroundColor: '#090d16', border: '1px solid rgba(239,68,68,0.3)',
+                  borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid color-mix(in srgb, var(--error) 30%, transparent)',
                   flexWrap: 'wrap', gap: '16px'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flex: 1, minWidth: '300px' }}>
-                  <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', marginTop: '2px' }}>
+                  <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'color-mix(in srgb, var(--error) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', marginTop: '2px' }}>
                     <AlertCircle size={20} />
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                      <strong style={{ fontSize: '1.05rem', color: 'white' }}>{job.recipientName}</strong>
-                      <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontFamily: 'monospace' }}>{job.recipientPhone}</span>
+                      <strong style={{ fontSize: '1.05rem', color: 'var(--text-main)' }}>{job.recipientName}</strong>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{job.recipientPhone}</span>
                       <Badge variant="error">{job.error || 'ERR_NETWORK_FAILURE'}</Badge>
                     </div>
 
-                    <p style={{ fontSize: '0.85rem', color: '#fca5a5', lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--error)', lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <HelpCircle size={15} style={{ flexShrink: 0 }} />
                       <span>{job.errorDescription}</span>
                     </p>
@@ -699,21 +699,21 @@ export const BroadcastQueue: React.FC = () => {
       </div>
 
       {/* Feed Terminal-Like de Logs de Disparo (SSE Log Viewer) */}
-      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px', borderColor: '#3b82f6' }}>
+      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px', borderColor: 'var(--primary)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'rgba(59,130,246,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--info) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
               <Terminal size={24} />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'white' }}>Feed Terminal-Like de Logs de Disparo (SSE Log Viewer)</h3>
-              <span style={{ fontSize: '0.85rem', color: '#93c5fd' }}>Console de monitoramento de eventos de servidor emitidos pelo BullMQ / Redis</span>
+              <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text-main)' }}>Feed Terminal-Like de Logs de Disparo (SSE Log Viewer)</h3>
+              <span style={{ fontSize: '0.85rem', color: 'var(--info)' }}>Console de monitoramento de eventos de servidor emitidos pelo BullMQ / Redis</span>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'white', cursor: 'pointer', userSelect: 'none' }}>
-              <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} style={{ accentColor: '#3b82f6', width: '18px', height: '18px', cursor: 'pointer' }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer', userSelect: 'none' }}>
+              <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} style={{ accentColor: 'var(--primary)', width: '18px', height: '18px', cursor: 'pointer' }} />
               <span>🔒 Auto-scroll para novos eventos</span>
             </label>
 
@@ -724,35 +724,35 @@ export const BroadcastQueue: React.FC = () => {
         </div>
 
         <div style={{
-          backgroundColor: '#030712', borderRadius: '12px', border: '1px solid #1f2937', padding: '24px',
-          fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: 1.6, color: '#e5e7eb', height: '320px',
+          backgroundColor: 'var(--background)', borderRadius: '12px', border: '1px solid var(--border)', padding: '24px',
+          fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text-main)', height: '320px',
           overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.8)'
         }}>
           {logs.length === 0 ? (
-            <div style={{ margin: 'auto', color: '#6b7280', fontStyle: 'italic' }}>[Console limpo. Aguardando novos eventos SSE da fila...]</div>
+            <div style={{ margin: 'auto', color: 'var(--text-muted)', fontStyle: 'italic' }}>[Console limpo. Aguardando novos eventos SSE da fila...]</div>
           ) : (
             logs.map(log => {
               const getLogColor = (t: string) => {
                 switch (t) {
-                  case 'INFO': return '#3b82f6';
-                  case 'SUCCESS': return '#10b981';
-                  case 'WARNING': return '#f59e0b';
-                  case 'ERROR': return '#ef4444';
-                  default: return '#9ca3af';
+                  case 'INFO': return 'var(--info)';
+                  case 'SUCCESS': return 'var(--success)';
+                  case 'WARNING': return 'var(--warning)';
+                  case 'ERROR': return 'var(--error)';
+                  default: return 'var(--text-muted)';
                 }
               };
 
               return (
-                <div key={log.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '4px' }}>
-                  <span style={{ color: '#6b7280', userSelect: 'none', fontSize: '0.85rem' }}>[{log.timestamp}]</span>
+                <div key={log.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', borderBottom: '1px solid color-mix(in srgb, var(--border) 15%, transparent)', paddingBottom: '4px' }}>
+                  <span style={{ color: 'var(--text-muted)', userSelect: 'none', fontSize: '0.85rem' }}>[{log.timestamp}]</span>
                   <span style={{ 
                     color: getLogColor(log.type), fontWeight: 700, fontSize: '0.8rem', padding: '1px 6px', 
-                    borderRadius: '4px', backgroundColor: `rgba(${log.type === 'ERROR' ? '239,68,68' : log.type === 'SUCCESS' ? '16,185,129' : log.type === 'WARNING' ? '245,158,11' : '59,130,246'}, 0.1)`,
+                    borderRadius: '4px', backgroundColor: log.type === 'ERROR' ? 'color-mix(in srgb, var(--error) 10%, transparent)' : log.type === 'SUCCESS' ? 'color-mix(in srgb, var(--success) 10%, transparent)' : log.type === 'WARNING' ? 'color-mix(in srgb, var(--warning) 10%, transparent)' : 'color-mix(in srgb, var(--info) 10%, transparent)',
                     border: `1px solid ${getLogColor(log.type)}`, minWidth: '75px', textAlign: 'center'
                   }}>
                     {log.type}
                   </span>
-                  <span style={{ color: log.type === 'ERROR' ? '#fca5a5' : log.type === 'WARNING' ? '#fde68a' : log.type === 'SUCCESS' ? '#a7f3d0' : '#e5e7eb', wordBreak: 'break-word', flex: 1 }}>
+                  <span style={{ color: log.type === 'ERROR' ? 'var(--error)' : log.type === 'WARNING' ? 'var(--warning)' : log.type === 'SUCCESS' ? 'var(--success)' : 'var(--text-main)', wordBreak: 'break-word', flex: 1 }}>
                     {log.message}
                   </span>
                 </div>
@@ -772,7 +772,7 @@ export const BroadcastQueue: React.FC = () => {
       <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <ListFilter size={22} style={{ color: 'var(--primary)' }} />
               <span>Jobs na Fila de Disparo Ativa</span>
             </h3>
@@ -780,7 +780,7 @@ export const BroadcastQueue: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '6px', backgroundColor: '#090d16', padding: '4px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', gap: '6px', backgroundColor: 'var(--surface)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border)' }}>
               {['ALL', 'QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED'].map(st => (
                 <button
                   key={st}
@@ -817,24 +817,24 @@ export const BroadcastQueue: React.FC = () => {
                 key={job.id} 
                 style={{ 
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', 
-                  borderRadius: '12px', backgroundColor: job.status === 'PROCESSING' ? 'rgba(234,179,8,0.1)' : 
-                                                         job.status === 'CANCELLED' ? 'rgba(100,116,139,0.1)' : '#090d16', 
-                  border: `1px solid ${job.status === 'PROCESSING' ? '#eab308' : 
-                                       job.status === 'CANCELLED' ? '#64748b' : 'var(--border)'}`,
+                  borderRadius: '12px', backgroundColor: job.status === 'PROCESSING' ? 'color-mix(in srgb, var(--warning) 10%, transparent)' : 
+                                                         job.status === 'CANCELLED' ? 'color-mix(in srgb, var(--text-muted) 10%, transparent)' : 'var(--surface)', 
+                  border: `1px solid ${job.status === 'PROCESSING' ? 'var(--warning)' : 
+                                       job.status === 'CANCELLED' ? 'var(--text-muted)' : 'var(--border)'}`,
                   flexWrap: 'wrap', gap: '16px', opacity: job.status === 'CANCELLED' ? 0.6 : 1
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{ 
                     width: '42px', height: '42px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: job.status === 'COMPLETED' ? 'rgba(16,185,129,0.1)' : 
-                                     job.status === 'PROCESSING' ? 'rgba(234,179,8,0.2)' : 
-                                     job.status === 'FAILED' ? 'rgba(239,68,68,0.1)' : 
-                                     job.status === 'CANCELLED' ? 'rgba(100,116,139,0.2)' : 'rgba(255,255,255,0.05)',
-                    color: job.status === 'COMPLETED' ? '#10b981' : 
-                           job.status === 'PROCESSING' ? '#eab308' : 
+                    backgroundColor: job.status === 'COMPLETED' ? 'color-mix(in srgb, var(--success) 10%, transparent)' : 
+                                     job.status === 'PROCESSING' ? 'color-mix(in srgb, var(--warning) 20%, transparent)' : 
+                                     job.status === 'FAILED' ? 'color-mix(in srgb, var(--error) 10%, transparent)' : 
+                                     job.status === 'CANCELLED' ? 'color-mix(in srgb, var(--text-muted) 20%, transparent)' : 'color-mix(in srgb, var(--border) 30%, transparent)',
+                    color: job.status === 'COMPLETED' ? 'var(--success)' : 
+                           job.status === 'PROCESSING' ? 'var(--warning)' : 
                            job.status === 'FAILED' ? 'var(--error)' : 
-                           job.status === 'CANCELLED' ? '#94a3b8' : '#94a3b8'
+                           job.status === 'CANCELLED' ? 'var(--text-muted)' : 'var(--text-muted)'
                   }}>
                     {job.status === 'COMPLETED' ? <CheckCircle2 size={20} /> :
                      job.status === 'PROCESSING' ? <Activity size={20} className="spinner" /> :
@@ -844,10 +844,10 @@ export const BroadcastQueue: React.FC = () => {
 
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <strong style={{ fontSize: '1rem', color: 'white', textDecoration: job.status === 'CANCELLED' ? 'line-through' : 'none' }}>
+                      <strong style={{ fontSize: '1rem', color: 'var(--text-main)', textDecoration: job.status === 'CANCELLED' ? 'line-through' : 'none' }}>
                         {job.recipientName}
                       </strong>
-                      <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontFamily: 'monospace' }}>{job.recipientPhone}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{job.recipientPhone}</span>
                     </div>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                       {job.messageSnippet}
@@ -857,7 +857,7 @@ export const BroadcastQueue: React.FC = () => {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                   {job.error && (
-                    <span style={{ fontSize: '0.75rem', color: job.status === 'CANCELLED' ? '#94a3b8' : 'var(--error)', backgroundColor: job.status === 'CANCELLED' ? 'rgba(255,255,255,0.05)' : 'rgba(239,68,68,0.1)', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${job.status === 'CANCELLED' ? '#64748b' : 'var(--error)'}` }}>
+                    <span style={{ fontSize: '0.75rem', color: job.status === 'CANCELLED' ? 'var(--text-muted)' : 'var(--error)', backgroundColor: job.status === 'CANCELLED' ? 'color-mix(in srgb, var(--border) 30%, transparent)' : 'color-mix(in srgb, var(--error) 10%, transparent)', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${job.status === 'CANCELLED' ? 'var(--text-muted)' : 'var(--error)'}` }}>
                       {job.error}
                     </span>
                   )}
@@ -880,15 +880,15 @@ export const BroadcastQueue: React.FC = () => {
       </div>
 
       {/* Painel de Histórico de Lotes Transmitidos */}
-      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: '#a855f7' }}>
+      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--primary)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'rgba(168,85,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a855f7' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--primary) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
               <History size={24} />
             </div>
             <div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)' }}>Histórico de lotes</h3>
-              <span style={{ fontSize: '0.85rem', color: '#d8b4fe' }}>Auditoria de entregas, volumes disparados e relatórios CSV consolidados</span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--primary)' }}>Auditoria de entregas, volumes disparados e relatórios CSV consolidados</span>
             </div>
           </div>
 
@@ -898,7 +898,7 @@ export const BroadcastQueue: React.FC = () => {
         <div className="table-scroll" style={{ borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem', minWidth: 640 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(255,255,255,0.03)', color: '#94a3b8' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '16px 24px', fontWeight: 600 }}>Data de Envio</th>
                 <th style={{ padding: '16px 24px', fontWeight: 600 }}>Notícia / Minuta Disparada</th>
                 <th style={{ padding: '16px 24px', fontWeight: 600 }}>Base Alcançada</th>
@@ -909,18 +909,18 @@ export const BroadcastQueue: React.FC = () => {
             </thead>
             <tbody style={{ borderTop: '1px solid var(--border)' }}>
               {historicalBatches.map(batch => (
-                <tr key={batch.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '18px 24px', color: '#cbd5e1', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <tr key={batch.id} style={{ borderBottom: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
+                  <td style={{ padding: '18px 24px', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Clock size={16} style={{ color: 'var(--primary)' }} />
                     <span>{batch.date}</span>
                   </td>
 
-                  <td style={{ padding: '18px 24px', color: 'white', fontWeight: 700 }}>
+                  <td style={{ padding: '18px 24px', color: 'var(--text-main)', fontWeight: 700 }}>
                     {batch.title}
                   </td>
 
-                  <td style={{ padding: '18px 24px', color: '#94a3b8' }}>
-                    <strong style={{ color: '#e2e8f0' }}>{batch.deliveredCount}</strong> / {batch.totalContacts} contatos
+                  <td style={{ padding: '18px 24px', color: 'var(--text-muted)' }}>
+                    <strong style={{ color: 'var(--text-main)' }}>{batch.deliveredCount}</strong> / {batch.totalContacts} contatos
                   </td>
 
                   <td style={{ padding: '18px 24px' }}>
@@ -932,7 +932,7 @@ export const BroadcastQueue: React.FC = () => {
                     </div>
                   </td>
 
-                  <td style={{ padding: '18px 24px', color: '#cbd5e1', fontFamily: 'monospace' }}>
+                  <td style={{ padding: '18px 24px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                     {batch.duration}
                   </td>
 
@@ -942,7 +942,7 @@ export const BroadcastQueue: React.FC = () => {
                       icon={Download} 
                       onClick={() => handleDownloadBatchCsv(batch)}
                       isLoading={isExportingCsvId === batch.id}
-                      style={{ height: '36px', fontSize: '0.8rem', borderColor: '#a855f7', color: '#a855f7', padding: '0 14px' }}
+                      style={{ height: '36px', fontSize: '0.8rem', borderColor: 'var(--primary)', color: 'var(--primary)', padding: '0 14px' }}
                     >
                       {isExportingCsvId === batch.id ? 'Gerando CSV...' : 'Baixar Relatório CSV'}
                     </Button>
@@ -955,7 +955,7 @@ export const BroadcastQueue: React.FC = () => {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <FileSpreadsheet size={16} style={{ color: '#a855f7' }} />
+            <FileSpreadsheet size={16} style={{ color: 'var(--primary)' }} />
             <span>Os relatórios CSV seguem o padrão RFC 4180 e contêm os IDs de rastreamento do Meta Graph API (WAMID) para auditoria antispam.</span>
           </span>
           <span>Exibindo os 4 lotes mais recentes</span>

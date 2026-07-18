@@ -36,6 +36,7 @@ import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { showToast } from '@/utils/toastHelper';
 import apiClient from '@/services/apiClient';
+import axios from 'axios';
 
 interface QueuedFile {
   id: string;
@@ -231,7 +232,7 @@ export const OcrReader: React.FC = () => {
           setQueue(prev => prev.map(q => q.id === fileObj.id ? { ...q, status: 'error', progress: 0, errorMessage: 'Erro no servidor' } : q));
           showToast.error(`Erro no OCR do arquivo "${fileObj.name}".`);
         }
-      } catch (err) {
+      } catch {
         setQueue(prev => prev.map(q => q.id === fileObj.id ? { ...q, status: 'error', progress: 0, errorMessage: 'Falha na comunicação' } : q));
         showToast.error(`Falha ao conectar com servidor OCR para "${fileObj.name}".`);
       }
@@ -287,8 +288,8 @@ export const OcrReader: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let width = img.width;
-    let height = img.height;
+    const width = img.width;
+    const height = img.height;
 
     if (rot === 90 || rot === 270) {
       canvas.width = height;
@@ -310,7 +311,7 @@ export const OcrReader: React.FC = () => {
     ctx.restore();
 
     if (crop) {
-      ctx.strokeStyle = '#3b82f6';
+      ctx.strokeStyle = 'var(--info)';
       ctx.lineWidth = Math.max(4, canvas.width / 100);
       ctx.setLineDash([12, 12]);
       const cropMarginX = canvas.width * 0.1;
@@ -319,7 +320,7 @@ export const OcrReader: React.FC = () => {
 
       ctx.lineWidth = Math.max(2, canvas.width / 250);
       ctx.setLineDash([]);
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
+      ctx.strokeStyle = `color-mix(in srgb, ${getComputedStyle(document.documentElement).getPropertyValue('--info').trim()} 40%, transparent)`;
       ctx.beginPath();
       ctx.moveTo(canvas.width * 0.36, cropMarginY); ctx.lineTo(canvas.width * 0.36, canvas.height * 0.9);
       ctx.moveTo(canvas.width * 0.63, cropMarginY); ctx.lineTo(canvas.width * 0.63, canvas.height * 0.9);
@@ -480,10 +481,13 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
           }
         }, 30);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao gerar draft:', error);
       setIsGeneratingAiDraft(false);
-      showToast.error(error.response?.data?.message || 'Falha na comunicação com o LLM Local.');
+      const message = axios.isAxiosError(error)
+        ? (error.response?.data as { message?: string } | undefined)?.message || 'Falha na comunicação com o LLM Local.'
+        : 'Falha na comunicação com o LLM Local.';
+      showToast.error(message);
     }
   };
 
@@ -517,11 +521,11 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
             maxWidth: 'min(96vw, 1100px)', width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column',
             overflow: 'hidden', boxShadow: '0 30px 90px rgba(0, 0, 0, 0.9)', border: '1px solid var(--primary)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--surface) 80%, transparent)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Split size={24} style={{ color: 'var(--primary)' }} />
                 <div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Visão Dividida Lado a Lado (Split-Screen OCR)</h3>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Visão Dividida Lado a Lado (Split-Screen OCR)</h3>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Inspecione a imagem original simultaneamente com o texto cru extraído pelo Tesseract</span>
                 </div>
               </div>
@@ -535,35 +539,35 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
             </div>
 
             {isSplitReprocessing && (
-              <div style={{ padding: '12px 24px', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'white' }}>
+              <div style={{ padding: '12px 24px', backgroundColor: 'color-mix(in srgb, var(--primary) 10%, transparent)', borderBottom: '1px solid color-mix(in srgb, var(--primary) 20%, transparent)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-main)' }}>
                   <span style={{ fontWeight: 600 }}>{splitStage}</span>
                   <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{splitProgress}%</span>
                 </div>
-                <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: '8px', backgroundColor: 'color-mix(in srgb, var(--border) 30%, transparent)', borderRadius: '4px', overflow: 'hidden' }}>
                   <div style={{ width: `${splitProgress}%`, height: '100%', backgroundColor: 'var(--primary)', transition: 'width 0.3s ease-out' }} />
                 </div>
               </div>
             )}
 
             <div className="split-pane" style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-              <div style={{ backgroundColor: '#05070f', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
+              <div style={{ backgroundColor: 'var(--background)', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <ImageIcon size={18} style={{ color: 'var(--primary)' }} />
                     <span>Imagem/PDF Original ({splitInspectItem.name})</span>
                   </span>
                   <Badge variant="primary">Visualizador Fiel</Badge>
                 </div>
 
-                <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#090d16', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px', minHeight: '350px' }}>
+                <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px', minHeight: '350px' }}>
                   <img src={'imageUrl' in splitInspectItem ? splitInspectItem.imageUrl : splitInspectItem.previewUrl || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&q=80'} alt="Original" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '4px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }} />
                 </div>
               </div>
 
-              <div style={{ backgroundColor: '#0b1120', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden' }}>
+              <div style={{ backgroundColor: 'var(--surface)', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <FileText size={18} style={{ color: 'var(--success)' }} />
                     <span>Texto Cru Extraído (Editável)</span>
                   </span>
@@ -580,7 +584,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
                   placeholder="O texto extraído aparecerá aqui..."
                   style={{
                     flex: 1, width: '100%', minHeight: '350px', padding: '20px', borderRadius: '8px',
-                    backgroundColor: '#0f172a', border: '1px solid var(--border)', color: '#f8fafc',
+                    backgroundColor: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-main)',
                     fontFamily: 'monospace', fontSize: '0.95rem', lineHeight: 1.6, resize: 'none', outline: 'none',
                     boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5)', overflowY: 'auto'
                   }}
@@ -610,11 +614,11 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
             maxWidth: '1100px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column',
             overflow: 'hidden', boxShadow: '0 30px 90px rgba(0, 0, 0, 0.9)', border: '1px solid var(--primary)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--surface) 80%, transparent)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Sliders size={24} style={{ color: 'var(--primary)' }} />
                 <div>
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Estúdio de Pré-Processamento Visual (Canvas HTML5)</h3>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Estúdio de Pré-Processamento Visual (Canvas HTML5)</h3>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Otimize rotação, corte e iluminação do jornal para máxima acurácia do motor OCR</span>
                 </div>
               </div>
@@ -622,13 +626,13 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', flex: 1, overflow: 'hidden' }}>
-              <div style={{ padding: '24px', backgroundColor: '#060912', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', position: 'relative', minHeight: '400px' }}>
+              <div style={{ padding: '24px', backgroundColor: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', position: 'relative', minHeight: '400px' }}>
                 <canvas ref={canvasRef} style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 10px 40px rgba(0,0,0,0.6)' }} />
               </div>
 
-              <div style={{ padding: '24px', backgroundColor: 'rgba(15, 23, 42, 0.6)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
+              <div style={{ padding: '24px', backgroundColor: 'color-mix(in srgb, var(--surface) 60%, transparent)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <RotateCw size={16} style={{ color: 'var(--primary)' }} /><span>Giro e Rotação</span>
                   </span>
                   <Button type="button" variant="secondary" onClick={handleRotate90} disabled={isSavingCanvas} style={{ justifyContent: 'center', height: '42px' }}>
@@ -637,7 +641,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Crop size={16} style={{ color: 'var(--primary)' }} /><span>Módulo de Corte (Cropping)</span>
                   </span>
                   <Button type="button" variant={cropSimulated ? 'primary' : 'secondary'} onClick={() => setCropSimulated(prev => !prev)} disabled={isSavingCanvas} style={{ justifyContent: 'center', height: '42px' }}>
@@ -648,7 +652,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-                      <span style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}><Sun size={16} style={{ color: '#eab308' }} /><span>Ajuste de Brilho</span></span>
+                      <span style={{ color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}><Sun size={16} style={{ color: 'var(--warning)' }} /><span>Ajuste de Brilho</span></span>
                       <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{brightness}%</span>
                     </div>
                     <input type="range" min="50" max="150" value={brightness} onChange={e => setBrightness(Number(e.target.value))} disabled={isSavingCanvas} style={{ width: '100%', cursor: 'pointer' }} />
@@ -656,7 +660,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-                      <span style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}><Contrast size={16} style={{ color: '#3b82f6' }} /><span>Contraste Visual</span></span>
+                      <span style={{ color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}><Contrast size={16} style={{ color: 'var(--primary)' }} /><span>Contraste Visual</span></span>
                       <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{contrast}%</span>
                     </div>
                     <input type="range" min="50" max="150" value={contrast} onChange={e => setContrast(Number(e.target.value))} disabled={isSavingCanvas} style={{ width: '100%', cursor: 'pointer' }} />
@@ -683,14 +687,14 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
         }}>
           <div className="glass-panel" style={{
             maxWidth: '1000px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column',
-            overflow: 'hidden', boxShadow: '0 30px 90px rgba(0, 0, 0, 0.8)', border: '1px solid rgba(255,255,255,0.15)',
+            overflow: 'hidden', boxShadow: '0 30px 90px rgba(0, 0, 0, 0.8)', border: '1px solid color-mix(in srgb, var(--border) 50%, transparent)',
             animation: 'scale-up 0.2s ease-out',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(15, 23, 42, 0.6)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--surface) 60%, transparent)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                {lightboxItem.type === 'pdf' ? <FileText size={24} style={{ color: '#ef4444' }} /> : <ImageIcon size={24} style={{ color: 'var(--primary)' }} />}
+                {lightboxItem.type === 'pdf' ? <FileText size={24} style={{ color: 'var(--error)' }} /> : <ImageIcon size={24} style={{ color: 'var(--primary)' }} />}
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'white' }}>{lightboxItem.name}</h3>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>{lightboxItem.name}</h3>
                   <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                     <span>{lightboxItem.sizeFormatted}</span><span>•</span><span>Enviado em {lightboxItem.uploadedAt}</span>
                   </div>
@@ -708,11 +712,11 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
               </div>
             </div>
 
-            <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#090d16', padding: '24px', minHeight: '360px', maxHeight: 'calc(90vh - 160px)' }}>
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--surface)', padding: '24px', minHeight: '360px', maxHeight: 'calc(90vh - 160px)' }}>
               <img src={lightboxItem.imageUrl} alt={lightboxItem.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }} />
             </div>
 
-            <div style={{ padding: '16px 24px', backgroundColor: 'rgba(15, 23, 42, 0.8)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '16px 24px', backgroundColor: 'color-mix(in srgb, var(--surface) 80%, transparent)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Status do Motor OCR:</span>
                 <Badge variant={lightboxItem.ocrStatus === 'Concluído' ? 'success' : lightboxItem.ocrStatus === 'Falha' ? 'error' : 'warning'}>{lightboxItem.ocrStatus}</Badge>
@@ -754,7 +758,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
               <Bot size={20} />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>Estúdio de Inteligência Artificial & Prompt (Gemini 3.5 Flash-lite)</span>
                 <Badge variant="primary">GOOGLE AI</Badge>
               </h3>
@@ -781,8 +785,8 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
           {/* Media Selection for AI Analysis */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FileCode2 size={16} style={{ color: '#c084fc' }} /> <span>Fontes de Notícias e Informações (URL ou Texto)</span>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FileCode2 size={16} style={{ color: 'var(--primary)' }} /> <span>Fontes de Notícias e Informações (URL ou Texto)</span>
             </label>
             <input
               type="text"
@@ -792,7 +796,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
               placeholder="Cole a URL da notícia ou digite o texto base..."
               style={{
                 width: '100%', height: '44px', padding: '0 16px', borderRadius: '8px',
-                backgroundColor: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border)', color: 'white',
+                backgroundColor: 'color-mix(in srgb, var(--surface) 80%, transparent)', border: '1px solid var(--border)', color: 'var(--text-main)',
                 fontSize: '0.9rem', outline: 'none'
               }}
             />
@@ -800,8 +804,8 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
 
           {/* Tone Selection */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <MessageSquareText size={16} style={{ color: '#c084fc' }} /> <span>Tom de Voz & Escrita</span>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <MessageSquareText size={16} style={{ color: 'var(--primary)' }} /> <span>Tom de Voz & Escrita</span>
             </label>
             <select
               value={aiTone}
@@ -809,7 +813,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
               disabled={isGeneratingAiDraft}
               style={{
                 width: '100%', height: '44px', padding: '0 16px', borderRadius: '8px',
-                backgroundColor: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border)', color: 'white',
+                backgroundColor: 'color-mix(in srgb, var(--surface) 80%, transparent)', border: '1px solid var(--border)', color: 'var(--text-main)',
                 fontSize: '0.9rem', outline: 'none', cursor: 'pointer'
               }}
             >
@@ -821,8 +825,8 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <AlignLeft size={16} style={{ color: '#c084fc' }} /> <span>Tamanho Máximo do Resumo (Caracteres)</span>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlignLeft size={16} style={{ color: 'var(--primary)' }} /> <span>Tamanho Máximo do Resumo (Caracteres)</span>
             </label>
             <input
               type="number"
@@ -833,7 +837,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
               max={5000}
               style={{
                 width: '100%', height: '44px', padding: '0 16px', borderRadius: '8px',
-                backgroundColor: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border)', color: 'white',
+                backgroundColor: 'color-mix(in srgb, var(--surface) 80%, transparent)', border: '1px solid var(--border)', color: 'var(--text-main)',
                 fontSize: '0.9rem', outline: 'none'
               }}
             />
@@ -842,8 +846,8 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
 
         {/* Custom Instructions Input */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Wand2 size={16} style={{ color: '#c084fc' }} /> <span>Instruções Adicionais de Prompt (Livre)</span>
+          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Wand2 size={16} style={{ color: 'var(--primary)' }} /> <span>Instruções Adicionais de Prompt (Livre)</span>
           </label>
           <textarea
             value={aiCustomInstructions}
@@ -852,7 +856,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
             placeholder="Ex: Formate os números com +55, separe por categorias, ignore anúncios publicitários..."
             style={{
               width: '100%', minHeight: '100px', padding: '16px', borderRadius: '8px',
-              backgroundColor: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border)', color: 'white',
+              backgroundColor: 'color-mix(in srgb, var(--surface) 80%, transparent)', border: '1px solid var(--border)', color: 'var(--text-main)',
               fontSize: '0.95rem', resize: 'vertical', outline: 'none', fontFamily: 'inherit'
             }}
           />
@@ -866,7 +870,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
             icon={Bot}
             onClick={handleGenerateAiDraft}
             isLoading={isGeneratingAiDraft}
-            style={{ height: '48px', padding: '0 32px', fontSize: '1rem', backgroundColor: '#a855f7', borderColor: '#a855f7' }}
+            style={{ height: '48px', padding: '0 32px', fontSize: '1rem', backgroundColor: 'var(--primary)', borderColor: 'var(--primary)' }}
           >
             {isGeneratingAiDraft ? 'Processando Inference no Gemini...' : 'Gerar Minuta de Notícia com Gemini'}
           </Button>
@@ -874,10 +878,10 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
 
         {/* Generated Output Display */}
         {generatedAiDraft && (
-          <div style={{ padding: '24px', borderRadius: '12px', backgroundColor: '#090d16', border: '1px solid #c084fc', display: 'flex', flexDirection: 'column', gap: '16px', animation: 'fade-in 0.3s ease-out' }}>
+          <div style={{ padding: '24px', borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid var(--primary)', display: 'flex', flexDirection: 'column', gap: '16px', animation: 'fade-in 0.3s ease-out' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Bot size={18} style={{ color: '#c084fc' }} />
+              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bot size={18} style={{ color: 'var(--primary)' }} />
                 <span>Minuta e Resumo Gerados (Gemini 3.5 Flash-lite)</span>
               </span>
               <Button type="button" variant="secondary" icon={Copy} onClick={handleCopyAiDraft} style={{ height: '32px', fontSize: '0.8rem' }}>
@@ -885,7 +889,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
               </Button>
             </div>
 
-            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.95rem', color: '#f8fafc', lineHeight: 1.6, padding: '16px', backgroundColor: '#0f172a', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: 1.6, padding: '16px', backgroundColor: 'var(--surface)', borderRadius: '8px', border: '1px solid color-mix(in srgb, var(--border) 40%, transparent)' }}>
               {generatedAiDraft}
             </pre>
           </div>
@@ -896,7 +900,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
       <div className="glass-panel" style={{ padding: '40px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <UploadCloud size={24} style={{ color: 'var(--primary)' }} />
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Área de Transferência e Importação Multimídia</h3>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Área de Transferência e Importação Multimídia</h3>
         </div>
 
         <div
@@ -906,17 +910,17 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
           onClick={() => fileInputRef.current?.click()}
           style={{
             border: `2px dashed ${isDragging ? 'var(--primary)' : 'var(--border)'}`,
-            borderRadius: '16px', padding: '56px 24px', backgroundColor: isDragging ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255, 255, 255, 0.01)',
+            borderRadius: '16px', padding: '56px 24px', backgroundColor: isDragging ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : 'color-mix(in srgb, var(--border) 10%, transparent)',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '16px',
             cursor: 'pointer', transition: 'all 0.2s ease-out',
           }}
         >
           <input type="file" ref={fileInputRef} multiple accept=".png,.jpg,.jpeg,.pdf" onChange={e => e.target.files && handleFilesAdded(e.target.files)} style={{ display: 'none' }} />
-          <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform 0.2s', transform: isDragging ? 'scale(1.1)' : 'scale(1)' }}>
+          <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform 0.2s', transform: isDragging ? 'scale(1.1)' : 'scale(1)' }}>
             <FileUp size={36} />
           </div>
           <div>
-            <span style={{ fontWeight: 700, color: 'white', fontSize: '1.2rem', display: 'block' }}>
+            <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '1.2rem', display: 'block' }}>
               {isDragging ? 'Solte os arquivos para adicionar à fila' : 'Arraste as imagens/PDFs das notícias aqui ou clique para selecionar'}
             </span>
             <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '6px', display: 'block' }}>
@@ -924,15 +928,15 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
             </span>
           </div>
           <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-            <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.05)', color: '#cbd5e1' }}>Alta Resolução Recomendada</span>
-            <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.05)', color: '#cbd5e1' }}>Detecção Multi-coluna</span>
+            <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--border) 30%, transparent)', color: 'var(--text-muted)' }}>Alta Resolução Recomendada</span>
+            <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--border) 30%, transparent)', color: 'var(--text-muted)' }}>Detecção Multi-coluna</span>
           </div>
         </div>
 
         {queue.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Layers size={18} style={{ color: 'var(--primary)' }} />
                 <span>Fila de Documentos ({queue.length})</span>
               </h4>
@@ -944,14 +948,14 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' }}>
               {queue.map(item => (
-                <div key={item.id} style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative', overflow: 'hidden' }}>
+                <div key={item.id} style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--border) 15%, transparent)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <div style={{ width: '56px', height: '56px', borderRadius: '8px', backgroundColor: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-                      {item.previewUrl ? <img src={item.previewUrl} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : item.type.includes('pdf') ? <FileText size={28} style={{ color: '#ef4444' }} /> : <ImageIcon size={28} style={{ color: 'var(--text-muted)' }} />}
+                      {item.previewUrl ? <img src={item.previewUrl} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : item.type.includes('pdf') ? <FileText size={28} style={{ color: 'var(--error)' }} /> : <ImageIcon size={28} style={{ color: 'var(--text-muted)' }} />}
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
-                      <span style={{ fontWeight: 600, color: 'white', fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{formatBytes(item.size)}</span>
                       <div style={{ marginTop: '2px' }}>
                         {item.status === 'error' && <span style={{ fontSize: '0.75rem', color: 'var(--error)', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={12} /><span>{item.errorMessage}</span></span>}
@@ -963,12 +967,12 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
 
                     <div style={{ display: 'flex', gap: '6px' }}>
                       {item.status === 'success' && (
-                        <button type="button" onClick={() => handleOpenSplitInspection(item)} style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: 'rgba(99,102,241,0.1)', border: '1px solid var(--primary)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Inspecionar Leitura OCR (Split-Screen)">
+                        <button type="button" onClick={() => handleOpenSplitInspection(item)} style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: 'color-mix(in srgb, var(--primary) 10%, transparent)', border: '1px solid var(--primary)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Inspecionar Leitura OCR (Split-Screen)">
                           <Split size={16} />
                         </button>
                       )}
                       {item.previewUrl && item.status !== 'uploading' && (
-                        <button type="button" onClick={() => handleOpenCanvasEditor(item)} style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Editar e Pré-Processar Imagem no Canvas">
+                        <button type="button" onClick={() => handleOpenCanvasEditor(item)} style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: 'color-mix(in srgb, var(--border) 30%, transparent)', border: '1px solid var(--border)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Editar e Pré-Processar Imagem no Canvas">
                           <Sliders size={16} />
                         </button>
                       )}
@@ -986,7 +990,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
                         <span>Progresso de Envio</span>
                         <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{item.progress}%</span>
                       </div>
-                      <div style={{ width: '100%', height: '6px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ width: '100%', height: '6px', backgroundColor: 'color-mix(in srgb, var(--border) 30%, transparent)', borderRadius: '3px', overflow: 'hidden' }}>
                         <div style={{ width: `${item.progress}%`, height: '100%', backgroundColor: 'var(--primary)', transition: 'width 0.2s linear' }} />
                       </div>
                     </div>
@@ -1004,14 +1008,14 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <FolderOpen size={24} style={{ color: 'var(--primary)' }} />
             <div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'white' }}>Galeria de Mídias Submetidas e Origens OCR</h3>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Galeria de Mídias Submetidas e Origens OCR</h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>Consulte arquivos originais salvos em disco, force novas extrações ou libere espaço</p>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', backgroundColor: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', padding: '8px 16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
             <HardDrive size={16} style={{ color: 'var(--primary)' }} />
-            <span>Espaço Ocupado: <strong style={{ color: 'white' }}>17.2 MB</strong> / 5 GB</span>
+            <span>Espaço Ocupado: <strong style={{ color: 'var(--text-main)' }}>17.2 MB</strong> / 5 GB</span>
           </div>
         </div>
 
@@ -1025,7 +1029,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
               <div 
                 key={media.id} 
                 style={{ 
-                  borderRadius: '12px', backgroundColor: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', 
+                  borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--border) 15%, transparent)', border: '1px solid var(--border)', 
                   display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'transform 0.2s, borderColor 0.2s',
                 }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
@@ -1034,7 +1038,7 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
                 <div 
                   onClick={() => setLightboxItem(media)}
                   style={{ 
-                    height: '160px', backgroundColor: '#0b0f19', position: 'relative', cursor: 'pointer', overflow: 'hidden',
+                    height: '160px', backgroundColor: 'var(--surface)', position: 'relative', cursor: 'pointer', overflow: 'hidden',
                     display: 'flex', alignItems: 'center', justifyContent: 'center'
                   }}
                 >
@@ -1044,13 +1048,13 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
                     <Badge variant={media.ocrStatus === 'Concluído' ? 'success' : media.ocrStatus === 'Falha' ? 'error' : 'warning'}>{media.ocrStatus}</Badge>
                   </div>
 
-                  <div style={{ position: 'absolute', bottom: '10px', left: '10px', backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'white' }}>
+                  <div style={{ position: 'absolute', bottom: '10px', left: '10px', backgroundColor: 'color-mix(in srgb, var(--surface) 85%, transparent)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--text-main)' }}>
                     <Maximize2 size={12} /><span>Ampliar</span>
                   </div>
                 </div>
 
                 <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
-                  <span style={{ fontWeight: 600, color: 'white', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={media.name}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={media.name}>
                     {media.name}
                   </span>
 
@@ -1069,10 +1073,10 @@ A minuta foi salva automaticamente e está aguardando aprovação no quadro Kanb
                     </button>
 
                     <div style={{ display: 'flex', gap: '6px' }}>
-                      <button type="button" onClick={() => handleManualExtraction(media)} disabled={isExtractingManual} title="Forçar Re-leitura OCR" style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: isExtractingManual ? 'var(--text-muted)' : '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <button type="button" onClick={() => handleManualExtraction(media)} disabled={isExtractingManual} title="Forçar Re-leitura OCR" style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', border: '1px solid var(--border)', color: isExtractingManual ? 'var(--text-muted)' : 'var(--info)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                         <RefreshCw size={14} />
                       </button>
-                      <button type="button" onClick={() => handleDeleteGalleryMedia(media.id, media.name)} title="Apagar do Disco" style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--error)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <button type="button" onClick={() => handleDeleteGalleryMedia(media.id, media.name)} title="Apagar do Disco" style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', border: '1px solid var(--border)', color: 'var(--error)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                         <Trash2 size={14} />
                       </button>
                     </div>

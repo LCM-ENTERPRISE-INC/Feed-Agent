@@ -13,8 +13,8 @@ export const useTokenMonitor = (warningThresholdSeconds = 60) => {
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
   const [showWarningModal, setShowWarningModal] = useState(false);
 
-  // For testing/sandboxing mock tokens, we mock an expiration of 5 minutes from login
-  const mockExpirationRef = useRef<number>(Date.now() + 5 * 60 * 1000);
+  // Initialized in effect to avoid impure Date.now() during render
+  const mockExpirationRef = useRef<number>(0);
 
   const extendSession = () => {
     // Simulate refreshing of JWT token (resets mock timer and alerts success)
@@ -33,10 +33,17 @@ export const useTokenMonitor = (warningThresholdSeconds = 60) => {
   };
 
   useEffect(() => {
+    if (!mockExpirationRef.current) {
+      mockExpirationRef.current = Date.now() + 5 * 60 * 1000;
+    }
+
     if (!isAuthenticated || !token) {
-      setSecondsRemaining(null);
-      setShowWarningModal(false);
-      return;
+      // Defer setState to avoid cascading renders (same pattern as WhatsAppInstanceModal)
+      const boot = window.setTimeout(() => {
+        setSecondsRemaining(null);
+        setShowWarningModal(false);
+      }, 0);
+      return () => window.clearTimeout(boot);
     }
 
     const checkInterval = setInterval(() => {

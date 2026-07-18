@@ -1,38 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, Mail, Lock, UserPlus, CheckCircle2, AlertCircle } from 'lucide-react';
+import axios from 'axios';
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { showToast } from '@/utils/toastHelper';
+import { getPasswordStrength } from '@/utils/passwordStrength';
 import apiClient from '@/services/apiClient';
 import '@/styles/login.css';
-
-// Password strength calculation utility
-export const getPasswordStrength = (pass: string): { score: number; text: string; color: string } => {
-  let score = 0;
-  if (!pass) return { score, text: 'Vazio', color: 'var(--text-muted)' };
-  
-  if (pass.length >= 6) score++;
-  if (/[A-Z]/.test(pass)) score++;
-  if (/[a-z]/.test(pass)) score++;
-  if (/[0-9]/.test(pass)) score++;
-  if (/[^A-Za-z0-9]/.test(pass)) score++;
-  
-  const texts = ['Muito Fraca', 'Fraca', 'Média', 'Forte', 'Excelente'];
-  const colors = [
-    'rgba(239, 68, 68, 0.4)',  // Red
-    'var(--error)',             // Stronger red
-    '#eab308',                  // Yellow
-    '#3b82f6',                  // Blue
-    'var(--success)',           // Green
-  ];
-
-  return { 
-    score, 
-    text: texts[score - 1] || 'Muito Fraca',
-    color: colors[score - 1] || 'var(--error)'
-  };
-};
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -92,8 +67,10 @@ export const Register: React.FC = () => {
         setError(msg);
         showToast.error(msg);
       }
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao criar nova credencial administrativa.';
+    } catch (err: unknown) {
+      const errorMsg = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error || 'Erro ao criar nova credencial administrativa.'
+        : 'Erro ao criar nova credencial administrativa.';
       setError(errorMsg);
       showToast.error(errorMsg);
     } finally {
