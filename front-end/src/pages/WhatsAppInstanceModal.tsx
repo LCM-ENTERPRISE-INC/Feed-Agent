@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertTriangle, RefreshCw, CheckCircle2, Clock, LogOut, Send, X } from 'lucide-react';
+import { AlertTriangle, RefreshCw, CheckCircle2, Clock, LogOut, Send, X, Lock } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useSseGateway } from '@/hooks/useSseGateway';
 import type { SseEvent } from '@/hooks/useSseGateway';
@@ -17,11 +17,11 @@ interface WhatsAppInstanceModalProps {
 type WaConnectionState = 'open' | 'connecting' | 'close' | 'banned' | 'DISCONNECTED';
 
 const statusCopy = (state: WaConnectionState, expired: boolean) => {
-  if (state === 'open') return { label: 'Conectado', hint: 'Pronto para enviar mensagens.' };
-  if (state === 'banned') return { label: 'Bloqueado', hint: 'Esta sessão foi barrada pelo WhatsApp.' };
+  if (state === 'open') return { label: 'Canal conectado', hint: 'Pronto para enviar mensagens.' };
+  if (state === 'banned') return { label: 'Bloqueado', hint: 'Esta sessão foi barrada pelo serviço de mensagens.' };
   if (expired) return { label: 'QR expirado', hint: 'Gere um novo código e escaneie novamente.' };
-  if (state === 'connecting') return { label: 'Aguardando leitura', hint: 'Abra o WhatsApp no celular e escaneie o QR.' };
-  return { label: 'Desconectado', hint: 'Solicite um QR para conectar este aparelho.' };
+  if (state === 'connecting') return { label: 'Aguardando leitura', hint: 'Abra o aplicativo no celular e escaneie o QR.' };
+  return { label: 'Canal desconectado', hint: 'Solicite um QR para conectar este canal.' };
 };
 
 export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
@@ -73,8 +73,12 @@ export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
+    document.body.classList.add('modal-open');
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      document.body.classList.remove('modal-open');
+      window.removeEventListener('keydown', onKey);
+    };
   }, [onClose]);
 
   const handleSseEvent = (event: SseEvent) => {
@@ -152,65 +156,45 @@ export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
   const copy = statusCopy(waState, qrExpired);
 
   return (
-    <div className="ui-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="wa-modal-title" onClick={onClose}>
-      <div className="ui-modal ui-modal--lg" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="ui-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wa-modal-title"
+      onClick={onClose}
+    >
+      <div className="ui-modal ui-modal--sheet" onClick={(e) => e.stopPropagation()}>
         <div className="ui-modal__header">
           <div style={{ minWidth: 0 }}>
-            <h2 id="wa-modal-title" className="ui-modal__title truncate" title={instanceName}>
-              {instanceName}
+            <h2 id="wa-modal-title" className="ui-modal__title truncate">
+              Conectar Canal
             </h2>
-            <p style={{ fontSize: '0.85rem', marginTop: 4 }}>
-              <strong>{copy.label}</strong> — {copy.hint}
+            <p className="connect-sheet__subtitle truncate" title={instanceName}>
+              {instanceName}
             </p>
           </div>
-          <button type="button" className="btn btn-ghost" onClick={onClose} aria-label="Fechar">
+          <button type="button" className="ui-modal__close" onClick={onClose} aria-label="Fechar">
             <X size={18} aria-hidden />
           </button>
         </div>
 
         <div className="ui-modal__body">
-          <div className="split-pane">
-            <div className="qr-frame">
-              <div
-                style={{
-                  padding: 16,
-                  backgroundColor: waState === 'open' ? 'color-mix(in srgb, var(--success) 8%, transparent)' : 'var(--surface)',
-                  borderRadius: 16,
-                  border: `3px solid ${waState === 'open' ? 'var(--success)' : 'var(--border)'}`,
-                  width: 'min(240px, 70vw)',
-                  aspectRatio: '1',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
+          <div className="connect-sheet">
+            <div className="connect-sheet__qr">
+              <div className={`connect-sheet__qr-box${waState === 'open' ? ' is-connected' : ''}`}>
                 {waState === 'open' ? (
                   <CheckCircle2 size={64} style={{ color: 'var(--success)' }} aria-hidden />
                 ) : qrPayload ? (
                   <img
                     src={qrPayload}
-                    alt="QR Code para conectar o WhatsApp"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', filter: qrExpired ? 'blur(6px)' : 'none' }}
+                    alt="QR Code para conectar o canal"
+                    style={{ filter: qrExpired ? 'blur(6px)' : 'none' }}
                   />
                 ) : (
                   <RefreshCw size={40} style={{ color: 'var(--primary)', animation: 'spin 0.8s linear infinite' }} aria-hidden />
                 )}
                 {qrExpired && waState !== 'open' && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      background: 'rgba(255,255,255,0.92)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      color: '#0f172a',
-                    }}
-                  >
+                  <div className="connect-sheet__qr-expired" role="status">
                     <Clock size={28} style={{ color: 'var(--error)' }} aria-hidden />
                     <strong>QR expirado</strong>
                   </div>
@@ -218,38 +202,25 @@ export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
               </div>
 
               {waState === 'connecting' && !qrExpired && (
-                <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{qrSecondsLeft}s restantes</span>
+                <span className="connect-sheet__timer">{qrSecondsLeft}s restantes</span>
               )}
-
-              <div className="stack-actions" style={{ width: '100%', flexDirection: 'column' }}>
-                {waState !== 'open' ? (
-                  <Button type="button" variant="primary" icon={RefreshCw} onClick={handleRequestNewQr} style={{ width: '100%' }}>
-                    {qrExpired ? 'Gerar novo QR' : 'Atualizar QR'}
-                  </Button>
-                ) : (
-                  <Button type="button" variant="danger" icon={LogOut} onClick={handleConfirmDisconnect} disabled={disconnecting} style={{ width: '100%' }}>
-                    Desconectar
-                  </Button>
-                )}
-                <Button type="button" variant="secondary" icon={AlertTriangle} onClick={onDelete} style={{ width: '100%', color: 'var(--error)' }}>
-                  Excluir instância
-                </Button>
-              </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Mensagem de teste</h3>
+            <div className="connect-sheet__form">
+              <div className="connect-sheet__status" role="status">
+                <strong>{copy.label}</strong>
+                <span>{copy.hint}</span>
+              </div>
+
+              <h3 className="connect-sheet__form-title">Mensagem de teste</h3>
               {waState !== 'open' && (
-                <div className="glass-panel" style={{ padding: 14, fontSize: '0.9rem' }}>
-                  Conecte o aparelho (status Conectado) para enviar um teste.
-                </div>
+                <div className="connect-sheet__hint">Conecte o canal para enviar uma mensagem de teste.</div>
               )}
+
               <form
                 onSubmit={handleSendTestMessage}
+                className="connect-sheet__form-fields"
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
                   opacity: waState === 'open' ? 1 : 0.55,
                   pointerEvents: waState === 'open' ? 'auto' : 'none',
                 }}
@@ -276,14 +247,34 @@ export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
                   className="form-input"
                   value={testMessage}
                   onChange={(e) => setTestMessage(e.target.value)}
-                  style={{ resize: 'vertical', minHeight: 80 }}
                 />
-                <Button type="submit" variant="primary" icon={Send} isLoading={testSendingState === 'typing'}>
+                <Button type="submit" variant="primary" icon={Send} isLoading={testSendingState === 'typing'} className="connect-sheet__submit">
                   Enviar teste
                 </Button>
               </form>
             </div>
           </div>
+        </div>
+
+        <div className="ui-modal__footer">
+          <div className="connect-sheet__actions">
+            {waState !== 'open' ? (
+              <Button type="button" variant="primary" icon={RefreshCw} onClick={handleRequestNewQr}>
+                {qrExpired ? 'Gerar novo QR' : 'Atualizar QR'}
+              </Button>
+            ) : (
+              <Button type="button" variant="danger" icon={LogOut} onClick={handleConfirmDisconnect} disabled={disconnecting}>
+                Desconectar
+              </Button>
+            )}
+            <Button type="button" variant="secondary" icon={AlertTriangle} onClick={onDelete} className="connect-sheet__danger">
+              Excluir Instância
+            </Button>
+          </div>
+          <p className="connect-sheet__secure">
+            <Lock size={12} aria-hidden />
+            Seus dados estão protegidos com criptografia de ponta a ponta.
+          </p>
         </div>
       </div>
     </div>

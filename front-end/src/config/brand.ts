@@ -1,11 +1,12 @@
 /**
- * Fonte única de verdade da marca ZapBusiness by LCM.
+ * Fonte única de verdade da marca ZapBusiness (LCM no copyright institucional).
  * Identidade visual provisória até assets oficiais.
  */
 export const BRAND = {
   productName: 'ZapBusiness',
   companyName: 'LCM Enterprise Ltda.',
   companyShort: 'LCM',
+  /** Assinatura institucional (copyright / metadados). */
   signature: 'ZapBusiness by LCM',
   tagline: 'Automação inteligente para comunicação empresarial',
   description:
@@ -14,7 +15,7 @@ export const BRAND = {
     'Comunicação empresarial com mais controle, agilidade e organização.',
   solutionLine: 'Uma solução desenvolvida pela LCM Enterprise.',
   solutionLineFull: 'ZapBusiness é uma solução desenvolvida pela LCM Enterprise Ltda.',
-  documentTitle: 'ZapBusiness | Comunicação empresarial by LCM',
+  documentTitle: 'ZapBusiness | Comunicação empresarial',
   metaDescription:
     'Central de comunicação empresarial para gerenciamento de contatos, conteúdos e campanhas.',
   shortName: 'ZapBusiness',

@@ -95,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onItemCli
       <div className="sidebar-footer">
         {!collapsed && <BrandCopyright compact className="sidebar-copyright" />}
         {collapsed && (
-          <span className="sidebar-copyright-short" title={BRAND.signature}>
+          <span className="sidebar-copyright-short" title={BRAND.companyName}>
             LCM
           </span>
         )}

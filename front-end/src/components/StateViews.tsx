@@ -1,6 +1,6 @@
 import React from 'react';
 import { StatePanel } from '@/components/StatePanel';
-import symbolUrl from '@/assets/brand/zapbusiness-symbol.svg';
+import symbolUrl from '@/assets/brand/symbol.svg';
 import { BRAND } from '@/config/brand';
 
 export const EmptyState: React.FC<{

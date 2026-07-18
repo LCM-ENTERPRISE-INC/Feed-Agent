@@ -1,7 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <rect width="512" height="512" rx="96" fill="#07111F"/>
-  <rect x="80" y="80" width="352" height="352" rx="72" fill="#0072B8"/>
-  <path d="M150 180h212L256 260l106 80H150" stroke="#F4F8FC" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="336" cy="180" r="20" fill="#00AEEF"/>
-  <circle cx="336" cy="340" r="20" fill="#28C5F5"/>
+  <defs>
+    <linearGradient id="pwa512-z" x1="100" y1="90" x2="400" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0072BB"/>
+      <stop offset="1" stop-color="#00AEEF"/>
+    </linearGradient>
+  </defs>
+  <path d="M120 120h240L180 250h210L130 390h240" stroke="url(#pwa512-z)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M330 295c0-32 26-58 58-58h10c32 0 58 26 58 58v12c0 32-26 58-58 58h-22l-28 32v-32c-12-12-18-28-18-44v-26z" fill="#0072BB"/>
+  <circle cx="372" cy="307" r="10" fill="#F4F8FC"/>
+  <circle cx="404" cy="307" r="10" fill="#F4F8FC"/>
+  <circle cx="436" cy="307" r="10" fill="#F4F8FC"/>
 </svg>

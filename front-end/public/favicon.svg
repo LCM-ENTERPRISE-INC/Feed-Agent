@@ -1,7 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
   <rect width="32" height="32" rx="8" fill="#07111F"/>
-  <rect x="4" y="4" width="24" height="24" rx="6" fill="#0072B8"/>
-  <path d="M9 11h14L15 16.5 23 22H9" stroke="#F4F8FC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="21.5" cy="11" r="1.4" fill="#00AEEF"/>
-  <circle cx="21.5" cy="22" r="1.4" fill="#28C5F5"/>
+  <defs>
+    <linearGradient id="fav-z" x1="6" y1="5" x2="26" y2="27" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0072BB"/>
+      <stop offset="1" stop-color="#00AEEF"/>
+    </linearGradient>
+  </defs>
+  <path d="M8 7h15L12 16h11L9 25h15" stroke="url(#fav-z)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M21 18.5c0-2.1 1.7-3.8 3.8-3.8h.6c2.1 0 3.8 1.7 3.8 3.8v.7c0 2.1-1.7 3.8-3.8 3.8h-1.4L22.2 25v-2.1c-.8-.8-1.2-1.8-1.2-3V18.5z" fill="#0072BB"/>
+  <circle cx="23.6" cy="19.3" r="0.7" fill="#F4F8FC"/>
+  <circle cx="25.6" cy="19.3" r="0.7" fill="#F4F8FC"/>
+  <circle cx="27.6" cy="29.3" r="0.7" fill="#F4F8FC" opacity="0"/>
+  <circle cx="27.6" cy="19.3" r="0.7" fill="#F4F8FC"/>
 </svg>

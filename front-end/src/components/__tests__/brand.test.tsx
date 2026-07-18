@@ -15,20 +15,24 @@ vi.mock('@/utils/toastHelper', () => ({
 }));
 
 describe('Identidade ZapBusiness', () => {
-  it('exibe ZapBusiness no login', () => {
+  it('exibe ZapBusiness no login com by LCM', () => {
     render(
       <MemoryRouter>
         <Login />
       </MemoryRouter>,
     );
-    expect(screen.getAllByText(BRAND.productName).length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText(BRAND.signature).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Zap').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Business').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(`by ${BRAND.companyShort}`).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: BRAND.loginCta })).toBeInTheDocument();
   });
 
-  it('copyright exibe LCM Enterprise com ano dinâmico', () => {
+  it('copyright exibe LCM Enterprise com ano dinâmico e assinatura', () => {
     render(<BrandCopyright />);
     const year = new Date().getFullYear();
     expect(screen.getByText(brandCopyright(year))).toBeInTheDocument();
+    expect(screen.getByText(BRAND.signature)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(BRAND.companyName))).toBeInTheDocument();
   });
 
@@ -44,6 +48,5 @@ describe('Identidade ZapBusiness', () => {
 
   it('meta title institucional está definido na configuração', () => {
     expect(BRAND.documentTitle).toContain('ZapBusiness');
-    expect(BRAND.documentTitle).toContain('LCM');
   });
 });
