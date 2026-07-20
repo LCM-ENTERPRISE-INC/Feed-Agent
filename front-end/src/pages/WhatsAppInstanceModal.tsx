@@ -41,6 +41,7 @@ export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState('Olá! Teste de instância.');
   const [testSendingState, setTestSendingState] = useState<'idle' | 'typing' | 'sent'>('idle');
+  const [connecting, setConnecting] = useState(false);
 
   const restartQrTimer = () => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -111,6 +112,18 @@ export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
     }
   };
 
+  const handleConnect = async () => {
+    try {
+      setConnecting(true);
+      showToast.info('Conectando...');
+      await apiClient.post(`/whatsapp/instances/${instanceId}/connect`);
+    } catch {
+      showToast.error('Falha ao tentar conectar.');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   const handleConfirmDisconnect = async () => {
     setDisconnecting(true);
     try {
@@ -129,7 +142,7 @@ export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
     if (!testPhone) return;
     setTestSendingState('typing');
     try {
-      await apiClient.post(`/whatsapp/instances/${instanceId}/test-message`, {
+      await apiClient.post(`/whatsapp/instances/${instanceId}/send-message`, {
         phoneNumber: testPhone,
         message: testMessage,
       });
@@ -147,13 +160,24 @@ export const WhatsAppInstanceModal: React.FC<WhatsAppInstanceModalProps> = ({
   const footer = (
     <>
       <div className="connection-modal__actions">
-        {waState !== 'open' ? (
+        {waState === 'open' && (
+          <Button type="button" variant="danger" icon={LogOut} onClick={handleConfirmDisconnect} disabled={disconnecting}>
+            Pausar Conexão
+          </Button>
+        )}
+        {waState === 'close' && (
+          <>
+            <Button type="button" variant="primary" icon={RefreshCw} onClick={handleConnect} disabled={connecting}>
+              Conectar
+            </Button>
+            <Button type="button" variant="secondary" onClick={handleRequestNewQr}>
+              Novo QR
+            </Button>
+          </>
+        )}
+        {waState === 'connecting' && (
           <Button type="button" variant="primary" icon={RefreshCw} onClick={handleRequestNewQr}>
             {qrExpired ? 'Gerar novo QR' : 'Atualizar QR'}
-          </Button>
-        ) : (
-          <Button type="button" variant="danger" icon={LogOut} onClick={handleConfirmDisconnect} disabled={disconnecting}>
-            Desconectar
           </Button>
         )}
         <Button type="button" variant="secondary" icon={AlertTriangle} onClick={onDelete} className="connection-modal__danger">

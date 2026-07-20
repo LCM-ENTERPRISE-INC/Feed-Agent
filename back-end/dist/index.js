@@ -51,8 +51,16 @@ app.use(rateLimiter_1.globalLimiter);
 // CORS — only allow the Vue 3 dashboard origin
 app.use((0, cors_1.default)());
 // Body parsers
-app.use(express_1.default.json({ limit: '10mb' }));
-app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express_1.default.json({ limit: '50mb' }));
+app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
+// Serve static uploads
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const uploadsPath = path_1.default.resolve(process.cwd(), 'uploads');
+if (!fs_1.default.existsSync(uploadsPath)) {
+    fs_1.default.mkdirSync(uploadsPath, { recursive: true });
+}
+app.use('/uploads', express_1.default.static(uploadsPath));
 // ─────────────────────────────────────────────────────────────────────────────
 // Swagger UI  →  /api-docs
 // ─────────────────────────────────────────────────────────────────────────────

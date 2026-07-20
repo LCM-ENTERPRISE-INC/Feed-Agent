@@ -8,6 +8,7 @@ const WhatsAppService_1 = require("./WhatsAppService");
 const prismaClient_1 = __importDefault(require("../models/prismaClient"));
 const logger_1 = __importDefault(require("../utils/logger"));
 const FeedHistoryService_1 = __importDefault(require("./FeedHistoryService"));
+const ChatMessage_1 = __importDefault(require("../models/ChatMessage"));
 class WhatsAppInstanceManager {
     // Map of instanceId -> WhatsAppService
     instances = new Map();
@@ -65,6 +66,27 @@ class WhatsAppInstanceManager {
         service.on('message:status', async ({ messageId, status }) => {
             await FeedHistoryService_1.default.updateStatusByMessageId(messageId, status);
             logger_1.default.info(`[whatsapp-webhook]: Message ${messageId} status updated to ${status} by instance ${instanceId}`);
+        });
+        service.on('wa:message', async (payload) => {
+            try {
+                await ChatMessage_1.default.create({
+                    instanceId: payload.instanceId,
+                    fromNumber: payload.fromNumber,
+                    text: payload.text,
+                    fromMe: false, // Incoming message
+                    timestamp: payload.timestamp,
+                    messageId: payload.messageId,
+                    mediaUrl: payload.mediaUrl,
+                    mediaType: payload.mediaType
+                });
+                logger_1.default.info(`[whatsapp-manager]: Saved incoming message ${payload.messageId} to MongoDB.`);
+            }
+            catch (err) {
+                // Ignore duplicate key errors if message already exists
+                if (err.code !== 11000) {
+                    logger_1.default.error(`[whatsapp-manager]: Failed to save incoming message to MongoDB: ${err.message}`);
+                }
+            }
         });
         this.instances.set(instanceId, service);
         return service;

@@ -183,6 +183,45 @@ class WhatsAppService extends events_1.EventEmitter {
         return sentMsg?.key?.id || '';
     }
     /**
+     * Sends a media file to a specific phone number.
+     */
+    async sendMedia(phoneNumber, mediaPath, mimeType, caption = '', originalName = '') {
+        if (!this.socket || this.status.state !== whatsapp_types_1.WaConnectionState.OPEN) {
+            throw new boom_1.Boom('WhatsApp is not connected.', { statusCode: 503 });
+        }
+        const sanitized = (0, phoneUtils_1.sanitizePhoneNumber)(phoneNumber);
+        let jid = (0, phoneUtils_1.toWhatsAppJid)(sanitized);
+        try {
+            const results = await this.socket.onWhatsApp(sanitized);
+            if (results && results.length > 0) {
+                if (results[0].exists)
+                    jid = results[0].jid;
+            }
+        }
+        catch (err) { }
+        await this.socket.presenceSubscribe(jid);
+        await (0, baileys_2.delay)(500);
+        await this.socket.sendPresenceUpdate('composing', jid);
+        await (0, baileys_2.delay)(1000);
+        await this.socket.sendPresenceUpdate('paused', jid);
+        const buffer = fs_1.default.readFileSync(mediaPath);
+        let sentMsg;
+        if (mimeType.startsWith('image/')) {
+            sentMsg = await this.socket.sendMessage(jid, { image: buffer, caption });
+        }
+        else if (mimeType.startsWith('video/')) {
+            sentMsg = await this.socket.sendMessage(jid, { video: buffer, caption });
+        }
+        else if (mimeType.startsWith('audio/')) {
+            sentMsg = await this.socket.sendMessage(jid, { audio: buffer, mimetype: mimeType });
+        }
+        else {
+            sentMsg = await this.socket.sendMessage(jid, { document: buffer, mimetype: mimeType, fileName: originalName, caption });
+        }
+        logger_1.default.info(`[whatsapp]: Media sent successfully to ${jid}`);
+        return sentMsg?.key?.id || '';
+    }
+    /**
      * Manually logs out from the current Baileys session and cleans up disk files.
      * Emits 'wa:close' to notify clients that the session was ended by the user.
      */
@@ -205,6 +244,26 @@ class WhatsAppService extends events_1.EventEmitter {
         catch (err) {
             logger_1.default.error(`[whatsapp-${this.instanceId}]: Error during logout: ${err}`);
             this._deleteSessionDir();
+        }
+        finally {
+            this.isManualOperation = false;
+        }
+    }
+    /**
+     * Pauses the current Baileys session without deleting the credentials from disk.
+     * Emits 'wa:close' to notify clients that the session was ended temporarily.
+     * Can be reconnected later automatically without scanning a QR code.
+     */
+    async disconnect() {
+        logger_1.default.info(`[whatsapp-${this.instanceId}]: Manual disconnect (pause) requested by user.`);
+        this.isManualOperation = true;
+        try {
+            this._closeSocket();
+            this._updateStatus(whatsapp_types_1.WaConnectionState.CLOSE);
+            this.emit('wa:close');
+        }
+        catch (err) {
+            logger_1.default.error(`[whatsapp-${this.instanceId}]: Error during disconnect: ${err}`);
         }
         finally {
             this.isManualOperation = false;
@@ -352,15 +411,44 @@ class WhatsAppService extends events_1.EventEmitter {
                     timestamp = parseInt(msg.messageTimestamp, 10) * 1000;
                 }
                 // Extract text (conversation for normal texts, extendedTextMessage for replies/links)
-                const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-                if (text) {
+                let text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+                let mediaUrl;
+                let mediaType;
+                const msgType = Object.keys(msg.message || {})[0];
+                if (['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage'].includes(msgType)) {
+                    try {
+                        const buffer = await (0, baileys_1.downloadMediaMessage)(msg, 'buffer', {}, {
+                            logger: this.socket.logger,
+                            reuploadRequest: this.socket.updateMediaMessage
+                        });
+                        const messageObj = msg.message[msgType];
+                        mediaType = messageObj?.mimetype || 'application/octet-stream';
+                        const ext = mediaType.split('/')[1]?.split(';')[0] || 'bin';
+                        const fileName = `${Date.now()}-${messageId}.${ext}`;
+                        const uploadPath = path_1.default.resolve(process.cwd(), 'uploads', fileName);
+                        if (!fs_1.default.existsSync(path_1.default.resolve(process.cwd(), 'uploads'))) {
+                            fs_1.default.mkdirSync(path_1.default.resolve(process.cwd(), 'uploads'), { recursive: true });
+                        }
+                        fs_1.default.writeFileSync(uploadPath, buffer);
+                        mediaUrl = `/uploads/${fileName}`;
+                        if (!text && messageObj?.caption) {
+                            text = messageObj.caption;
+                        }
+                    }
+                    catch (err) {
+                        logger_1.default.error(`[whatsapp-${this.instanceId}]: Failed to download incoming media: ${err}`);
+                    }
+                }
+                if (text || mediaUrl) {
                     logger_1.default.info(`[whatsapp-${this.instanceId}]: Received message from ${fromNumber}`);
                     this.emit('wa:message', {
                         instanceId: this.instanceId,
                         messageId,
                         fromNumber,
                         text,
-                        timestamp
+                        timestamp,
+                        mediaUrl,
+                        mediaType
                     });
                 }
             }

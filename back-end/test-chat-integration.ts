@@ -3,8 +3,11 @@ import { EventEmitter } from 'events';
 import request from 'supertest';
 const EventSource = require('eventsource').EventSource;
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { WhatsAppController } from './src/controllers/WhatsAppController';
 import whatsAppInstanceManager from './src/services/WhatsAppInstanceManager';
+import ChatMessage from './src/models/ChatMessage';
 
 // Mock JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret';
@@ -28,8 +31,8 @@ const mockAuth = (req: Request, res: Response, next: NextFunction) => {
 const controller = new WhatsAppController();
 
 // Setup routes
+app.post('/api/whatsapp/instances/:id/send-message', mockAuth, controller.sendMessage);
 app.get('/api/whatsapp/instances/:id/messages/stream', mockAuth, controller.streamMessages);
-app.post('/api/whatsapp/instances/:id/test-message', mockAuth, controller.sendTestMessage);
 
 // Mock WhatsApp Instance
 class MockLiveInstance extends EventEmitter {
@@ -65,8 +68,25 @@ const mockInstance = new MockLiveInstance(1);
 };
 
 async function runTest() {
-  console.log('--- Iniciando Teste de Integração (Chat <-> Backend SSE) ---');
+  console.log('--- Iniciando Teste de Integração (Chat <-> Backend SSE + MongoDB) ---');
   
+  // Start MongoMemoryServer
+  const mongoServer = await MongoMemoryServer.create();
+  await mongoose.connect(mongoServer.getUri());
+  console.log('[Test] MongoDB em memória conectado.');
+
+  // Attach the same DB listener that WhatsAppInstanceManager uses
+  mockInstance.on('wa:message', async (payload: any) => {
+    await ChatMessage.create({
+      instanceId: payload.instanceId,
+      fromNumber: payload.fromNumber,
+      text: payload.text,
+      fromMe: false,
+      timestamp: payload.timestamp,
+      messageId: payload.messageId
+    });
+  });
+
   const server = app.listen(0, () => {
     const port = (server.address() as any).port;
     const token = jwt.sign({ userId: 1, email: 'test@lcm.com' }, JWT_SECRET);
@@ -82,11 +102,11 @@ async function runTest() {
       
       // 2. Simulate Frontend sending a message via POST
       const targetPhone = '5511999999999';
-      const messageToSend = 'Olá, este é um teste de integração!';
+      const messageToSend = 'Olá, este é um teste de integração no MongoDB!';
       
-      console.log(`\n[Test] Simulando Frontend enviando POST para /test-message...`);
+      console.log(`\n[Test] Simulando Frontend enviando POST para /send-message...`);
       request(app)
-        .post(`/api/whatsapp/instances/${instanceId}/test-message`)
+        .post(`/api/whatsapp/instances/${instanceId}/send-message`)
         .set('Authorization', `Bearer ${token}`)
         .send({
           phoneNumber: targetPhone,
@@ -104,10 +124,30 @@ async function runTest() {
     
     es.addEventListener('message', (e: any) => {
       console.log('\n[SSE] Mensagem recebida via Stream (SSE):', e.data);
-      console.log('\n--- Teste Concluído com Sucesso! ---');
-      es.close();
-      server.close();
-      process.exit(0);
+      
+      // 3. Test the GET /messages endpoint to verify MongoDB persistence
+      console.log('\n[Test] Buscando histórico no banco (GET /messages)...');
+      setTimeout(() => {
+        const token2 = jwt.sign({ userId: 1, email: 'test@lcm.com' }, JWT_SECRET);
+        request(app)
+          .get(`/api/whatsapp/instances/${instanceId}/messages?contact=5511999999999`)
+          .set('Authorization', `Bearer ${token2}`)
+          .expect(200)
+          .end(async (err, res) => {
+            if (err) {
+              console.error('[Test] Erro ao buscar mensagens no mongoDB:', err);
+              process.exit(1);
+            }
+            console.log('[Test] Histórico recebido do Mongo (GET):', res.body.data);
+            
+            console.log('\n--- Teste Concluído com Sucesso! ---');
+            es.close();
+            server.close();
+            await mongoose.disconnect();
+            await mongoServer.stop();
+            process.exit(0);
+          });
+      }, 500); // give mongo a moment to save
     });
     
     es.addEventListener('error', (err: any) => {

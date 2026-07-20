@@ -722,6 +722,7 @@ a {
   border-right: 1px solid var(--border);
   background: var(--surface);
   transition: width var(--transition-slow);
+  overflow-x: hidden;
 }
 
 .sidebar-collapsed {
@@ -906,6 +907,7 @@ a {
 .sidebar-nav {
   flex-grow: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   margin-bottom: 12px;
 }
 
@@ -920,6 +922,8 @@ a {
 
 .nav-list {
   list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;

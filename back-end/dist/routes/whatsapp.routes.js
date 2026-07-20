@@ -6,6 +6,23 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const WhatsAppController_1 = __importDefault(require("../controllers/WhatsAppController"));
 const authMiddleware_1 = require("../middlewares/authMiddleware");
+const multer_1 = __importDefault(require("multer"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const uploadsPath = path_1.default.resolve(process.cwd(), 'uploads');
+if (!fs_1.default.existsSync(uploadsPath)) {
+    fs_1.default.mkdirSync(uploadsPath, { recursive: true });
+}
+const storage = multer_1.default.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadsPath);
+    },
+    filename: (req, file, cb) => {
+        const ext = file.originalname.split('.').pop() || 'bin';
+        cb(null, `${Date.now()}-${Math.round(Math.random() * 1E9)}.${ext}`);
+    }
+});
+const upload = (0, multer_1.default)({ storage });
 const router = (0, express_1.Router)();
 /**
  * @openapi
@@ -111,7 +128,31 @@ router.get('/instances/:id/stream', authMiddleware_1.authMiddleware, WhatsAppCon
 router.get('/instances/:id/messages/stream', authMiddleware_1.authMiddleware, WhatsAppController_1.default.streamMessages.bind(WhatsAppController_1.default));
 /**
  * @openapi
- * /api/whatsapp/instances/{id}/test-message:
+ * /api/whatsapp/instances/{id}/messages:
+ *   get:
+ *     summary: Obter histórico de mensagens de um contato no MongoDB
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: contact
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de mensagens recuperadas com sucesso.
+ */
+router.get('/instances/:id/messages', authMiddleware_1.authMiddleware, WhatsAppController_1.default.getChatHistory.bind(WhatsAppController_1.default));
+/**
+ * @openapi
+ * /api/whatsapp/instances/{id}/send-message:
  *   post:
  *     summary: Enviar mensagem de teste pelo WhatsApp
  *     tags: [WhatsApp]
@@ -141,7 +182,41 @@ router.get('/instances/:id/messages/stream', authMiddleware_1.authMiddleware, Wh
  *       200:
  *         description: Mensagem enviada com sucesso.
  */
-router.post('/instances/:id/test-message', authMiddleware_1.authMiddleware, WhatsAppController_1.default.sendTestMessage.bind(WhatsAppController_1.default));
+router.post('/instances/:id/send-message', authMiddleware_1.authMiddleware, WhatsAppController_1.default.sendMessage.bind(WhatsAppController_1.default));
+/**
+ * @openapi
+ * /api/whatsapp/instances/{id}/send-media:
+ *   post:
+ *     summary: Enviar mídia/documento pelo WhatsApp
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [phoneNumber, file]
+ *             properties:
+ *               phoneNumber:
+ *                 type: string
+ *               caption:
+ *                 type: string
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Mídia enviada com sucesso.
+ */
+router.post('/instances/:id/send-media', authMiddleware_1.authMiddleware, upload.single('file'), WhatsAppController_1.default.sendMedia.bind(WhatsAppController_1.default));
 /**
  * @openapi
  * /api/whatsapp/instances/{id}/restart:
@@ -180,4 +255,23 @@ router.post('/instances/:id/restart', authMiddleware_1.authMiddleware, WhatsAppC
  *         description: Desconectado com sucesso.
  */
 router.post('/instances/:id/logout', authMiddleware_1.authMiddleware, WhatsAppController_1.default.logout.bind(WhatsAppController_1.default));
+/**
+ * @openapi
+ * /api/whatsapp/instances/{id}/connect:
+ *   post:
+ *     summary: Reconectar sessão pausada do WhatsApp sem pedir QR Code
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Reconectando com sucesso.
+ */
+router.post('/instances/:id/connect', authMiddleware_1.authMiddleware, WhatsAppController_1.default.connect.bind(WhatsAppController_1.default));
 exports.default = router;

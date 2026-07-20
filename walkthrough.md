@@ -1,70 +1,53 @@
-# Walkthrough: Integração da Interface de Chat (Frontend ↔ Backend)
+# Walkthrough: Arquitetura e Integração do Bate-Papo (Frontend ↔ Backend)
 
-Este documento detalha meticulosamente a arquitetura da solução de integração entre o Frontend (Interface de Bate-Papo) e as Rotas de Backend, apresentando as implementações de sucesso, o fluxo de comunicação e os pontos de atenção (ou limitações) atuais do sistema.
+Este documento detalha meticulosamente a arquitetura da solução de integração do Bate-Papo no projeto Feed Agent, unindo os desenvolvimentos da etapa inicial (estruturas base de tempo real) com as evoluções estruturais entregues posteriormente (Suporte a Anexos de Mídia, Histórico em Banco de Dados e Seleção de Múltiplos Canais).
 
-## 1. Mapeamento das Rotas e Integrações (Frontend ↔ Backend)
+## 1. Mapeamento das Rotas e Integrações Core
 
-O funcionamento do Chat depende da orquestração de várias APIs e mecanismos de comunicação em tempo real. A comunicação foi projetada para lidar tanto com requisições HTTP tradicionais quanto com a conexão persistente SSE (Server-Sent Events) para envio passivo de dados.
+O funcionamento do Chat depende da orquestração de várias APIs e mecanismos de comunicação em tempo real e de arquivos. A comunicação é feita via HTTP REST e SSE (Server-Sent Events) para atualizações passivas.
 
-### 1.1 Obtenção das Contas Conectadas
-- **Endpoint:** `GET /api/whatsapp/instances`
-- **Uso no Frontend:** Logo que a página `Chat.tsx` carrega, ela dispara uma requisição para listar todas as instâncias vinculadas à conta do usuário.
-- **Lógica de Sucesso:** O Frontend filtra automaticamente e seleciona a primeira instância cujo `liveStatus.state` seja igual a `"open"`.
-- **Status da Integração:** **[SUCESSO]** A integração funciona perfeitamente. Se o usuário não tiver nenhuma conta ativa/escaneada, o Chat exibe alertas claros na interface ("Nenhuma conta WhatsApp").
+### 1.1 Listagem de Contatos (Call List) e Canais
+- **Endpoint de Contatos:** `GET /api/contacts?page=1&limit=1000`
+- **Endpoint de Canais:** `GET /api/whatsapp/instances`
+- **Fluxo no Frontend:** A barra lateral esquerda puxa a base de contatos para iniciar conversas. No topo, o aplicativo lista os canais (instâncias) de WhatsApp abertos e conectados.
+- **Evolução (Seleção Dinâmica de Canal):** Diferente da versão inicial que travava a UI exigindo um "dispositivo global", hoje a plataforma **aprende qual dispositivo o contato usou**. O botão inteligente no topo busca em qual canal aquele contato já tinha histórico e o seleciona automaticamente. Se não houver, o usuário pode clicar no botão para abrir um **Grid Modal** e escolher por onde quer responder, de forma contextual.
 
-### 1.2 Listagem de Contatos (Call List)
-- **Endpoint:** `GET /api/contacts?page=1&limit=1000`
-- **Uso no Frontend:** A barra lateral esquerda (Call List) puxa a base de contatos do backend para exibir a lista completa de números com os quais o usuário pode iniciar uma conversa.
-- **Status da Integração:** **[SUCESSO]** Os dados chegam perfeitamente no formato `{ phone, name }` e são populados na lista lateral. Novos contatos podem ser iniciados através do botão "+ Novo" (que injeta na lista temporariamente no Frontend).
+### 1.2 Comunicação em Tempo Real de Mensagens (Ouvinte/Receiver)
+- **Endpoint:** `GET /api/whatsapp/instances/:id/messages/stream?token=...`
+- **Mecanismo:** `EventSource` (SSE)
+- **Fluxo Funcional:** O Frontend abre uma conexão HTTP de via única contínua. O backend intercepta eventos `wa:message` gerados pela biblioteca Baileys e dispara pacotes JSON de volta para o cliente. 
+- **Evolução (Persistência no MongoDB):** A versão inicial alertava que o histórico só existia na memória efêmera (`useState`). A persistência completa foi devidamente implementada! O `WhatsAppInstanceManager` escuta mensagens recebidas e enviadas, gravando tudo na coleção `ChatMessage` no MongoDB. Quando você clica em um contato, o Frontend faz um fetch imediato do banco (usando o endpoint inteligente `GET /api/whatsapp/instances/:id/messages?contact=...`), trazendo todo o passado da conversa de forma instantânea, resistindo a atualizações de página.
 
-### 1.3 Comunicação em Tempo Real de Mensagens (Ouvinte/Receiver)
-- **Endpoint:** `GET /api/whatsapp/instances/:id/messages/stream` (Autenticado via `?token=...`)
-- **Mecanismo:** `EventSource` (SSE - Server-Sent Events)
-- **Fluxo Funcional:** 
-  1. O Frontend abre uma conexão HTTP de via única e contínua com o servidor.
-  2. O servidor valida o Token JWT na Query String e anexa o usuário à sessão.
-  3. O backend intercepta os eventos `wa:message` gerados pela instância real do WhatsApp (via biblioteca Baileys) e dispara pacotes JSON de volta para o cliente.
-- **Status da Integração:** **[SUCESSO]** Validamos (através de scripts de integração direta - `test-chat-integration.ts`) que a rota SSE não sofre com timeouts arbitrários, que a autenticação no formato query string processa corretamente os Tokens, e que a rota reage a novas mensagens em tempo real.
-
-### 1.4 Envio de Mensagens
-- **Endpoint:** `POST /api/whatsapp/instances/:id/test-message`
-- **Fluxo Funcional:** 
-  1. O usuário digita uma mensagem no Frontend e clica em enviar.
-  2. A interface imediatamente embute a mensagem na tela para resposta visual instantânea (Optimistic UI update).
-  3. Dispara a requisição contendo `{ phoneNumber, message }`.
-  4. O controller (`WhatsAppController.sendTestMessage`) localiza a instância ao vivo na memória do backend e chama a função nativa do WhatsApp (`sendMessage`).
-- **Status da Integração:** **[SUCESSO]** A mensagem é despachada na infraestrutura do backend corretamente.
+### 1.3 Envio de Mensagens de Texto
+- **Endpoint:** `POST /api/whatsapp/instances/:id/send-message` (Refatorado semânticamente a partir do antigo endpoint de testes).
+- **Fluxo Funcional:** A UI embute a mensagem instantaneamente (Optimistic UI) e a requisição aciona o método nativo do WhatsApp pelo backend.
 
 ---
 
-## 2. Pontos Críticos e Possíveis Falhas (Atenção Imediata)
+## 2. O Novo Sistema de Anexos e Mídias 📎
 
-Apesar da estrutura de transporte (ida e volta) ter validado perfeitamente no script de integração, existem algumas ressalvas arquitetônicas na modelagem atual que precisarão ser resolvidas para a robustez de um sistema em produção.
+Uma das maiores atualizações foi habilitar o suporte completo de mídia. A plataforma agora envia e recebe vídeos, áudios, imagens e documentos, com visualização rica nativa em ambos os lados da conversa.
 
-> [!WARNING]
-> Persistência do Histórico de Conversas (No Frontend)
-> Atualmente, o frontend (`Chat.tsx`) guarda o histórico das mensagens **apenas no estado de memória do React (`useState`)**. 
-> - **Problema:** Quando o usuário atualiza a página (`F5`), as conversas que estavam na tela desaparecem do visual (embora continuem a existir no celular da pessoa).
-> - **Ação Recomendada:** O Backend deve possuir uma nova rota como `GET /api/whatsapp/instances/:id/messages?contact=5511999999999` para que o frontend carregue o banco de dados real com as conversas antigas daquele contato ao clicar no nome na barra lateral. A integração atual só lida de fato com "O que é recebido no momento em que a aba está aberta".
+### 2.1 Backend (Motor de Arquivos)
+- **Servidor de Arquivos Estáticos:** O arquivo de inicialização (`index.ts`) foi atualizado para hospedar estaticamente o volume do Docker via `app.use('/uploads', express.static(...))`, permitindo que as fotos e vídeos sejam renderizados na web.
+- **Upload via API (`POST /api/whatsapp/instances/:id/send-media`):** Rota recém-criada, acoplada ao middleware **Multer**. O frontend submete as imagens no formato `multipart/form-data` e o servidor as hospeda em disco com nomes únicos.
+- **Integração com a Biblioteca Core (Baileys):**
+  - **Envio:** O método `sendMedia` foi implementado no `WhatsAppService.ts`. Ele lê o arquivo local como `Buffer` no Node.js e despacha via WhatsApp de acordo com o padrão esperado pelo app do celular destino (analisando o `mimeType` para enviar como `image`, `video`, `audio` ou `document`).
+  - **Download Automático:** O receiver de mensagens interceptoras (`messages.upsert`) detecta pacotes classificados como anexo (`imageMessage`, `videoMessage`, `audioMessage` e `documentMessage`). Ele usa a função nativa `downloadMediaMessage` para salvar a mídia na pasta `/uploads` e acopla a referência preenchendo as novas propriedades `mediaUrl` e `mediaType` no Banco de Dados.
 
-> [!CAUTION]
-> Nomenclatura da Rota de Envio
-> Estamos utilizando o endpoint `/test-message` para realizar os disparos do chat. Ele realiza o envio sem problemas, porém seria muito mais viável e semântico refatorar a rota ou criar uma nova rota exclusiva para `POST /api/whatsapp/instances/:id/messages`.
+### 2.2 Frontend (A Experiência Visual Rica)
+- **Botão de Anexar Mídia:** Um ícone de Clipe de Papel chama o explorador de arquivos nativo do usuário (Suportando PDFs, Imagens, Vídeos, Áudios e Docs).
+- **Barra de Prévia (Preview Box):** Antes de confirmar o envio, o arquivo selecionado fica fixado acima da caixa de digitação. O usuário pode preencher uma legenda de acompanhamento ou clicar no ícone `X` para cancelar o disparo.
+- **Renderização Dinâmica na Bolha do Chat (Chat Bubbles):** O código frontend foi expandido para exibir elementos HTML de acordo com a mídia.
+  - **Fotos (`image/*`):** Exibidas como miniaturas em formato fotográfico arredondado.
+  - **Áudios (`audio/*`):** Renderiza um elemento HTML `<audio controls>` que permite dar Play, Pausa, acelerar e mudar o volume diretamente sem sair da tela do chat.
+  - **Vídeos e Documentos:** Renderizam banners informativos e elegantes na mensagem com ícones descritivos.
+- **Modal de Visualização Fullscreen:** Ao interagir clicando em fotos, vídeos ou arquivos PDFs na timeline, a tela inteira se escurece e o conteúdo é apresentado em tamanho real centralizado com controles nativos de navegação.
 
-> [!NOTE]
-> Bloqueio da UI por Falta de Sessão Ativa
-> Se o backend ou o container reiniciar, a instância do WhatsApp entrará no estado `DISCONNECTED`. Para que a integração SSE volte a funcionar, o usuário terá que refazer a leitura do QRCode através da tela de **Conexão** (ou via tela de inicialização) antes de usar o Bate-papo. O frontend foi desenvolvido para "barrar" a abertura do chat até que uma conexão `open` venha no array.
+---
 
-## 3. Resumo da Verificação Final
+## 3. Correções Técnicas e Estabilidade (Fixes)
+- **Erro de Tipagem Restritiva:** Durante o desenvolvimento do módulo de download do Baileys para o recebimento de mídias, a interface TypeScript acusou que um injetor nativo de logs (`this.socket`) poderia ser estaticamente inferido como "nulo" - impedindo o build da imagem do `back-end` do Docker (Erro 2531). O bug estrutural de CI/CD foi superado adicionando a verificação de asserção não-nula (`this.socket!`) que obriga o compilador a entender que naquele ciclo de escuta a instância Socket já está 100% operacional, destravando a publicação dos containeres Docker.
 
-O script assíncrono `test-chat-integration.ts` provou cabalmente a viabilidade estrutural do nosso SSE. Abaixo a transcrição sintética do fluxo que validou os túneis:
-
-```diff
-+ [Test] Conectando ao SSE stream em: /api/whatsapp/instances/999/messages/stream?token=...
-+ [SSE] Conexão estabelecida: {"instanceId":999,"message":"Listening for incoming messages..."}
-+ [Test] Simulando Frontend enviando POST para /test-message...
-+ [MockInstance] Received request to send message to 5511999999999: "Olá, este é um teste de integração!"
-+ [SSE] Mensagem recebida via Stream (SSE): {"fromNumber":"5511999999999","text":"Echo do Backend..."}
-```
-
-A orquestração técnica dos dados via rede não possui bugs imediatos que precisem de hot-fix. O sistema comunica ativamente as digitações do usuário final com as bibliotecas core do backend.
+## Resumo da Arquitetura Atual
+O Chat deixou de ser apenas um "prova de conceito de texto isolada" em memória e evoluiu para um sistema completo e multicanal. O histórico de mensagens está seguro e persistente no MongoDB de alta-escala, atualizações forçadas (F5) não deletam mais mensagens da tela, as rotas assumiram semânticas precisas, e o frontend adquiriu inteligência para manipular e renderizar dezenas de formatos de arquivos perfeitamente integrados ao Docker File-System.

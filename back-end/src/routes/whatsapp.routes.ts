@@ -1,6 +1,25 @@
 import { Router } from 'express';
 import whatsAppController from '../controllers/WhatsAppController';
 import { authMiddleware } from '../middlewares/authMiddleware';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+const uploadsPath = path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsPath);
+  },
+  filename: (req, file, cb) => {
+    const ext = file.originalname.split('.').pop() || 'bin';
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1E9)}.${ext}`);
+  }
+});
+const upload = multer({ storage });
 
 const router = Router();
 
@@ -113,7 +132,32 @@ router.get('/instances/:id/messages/stream', authMiddleware, whatsAppController.
 
 /**
  * @openapi
- * /api/whatsapp/instances/{id}/test-message:
+ * /api/whatsapp/instances/{id}/messages:
+ *   get:
+ *     summary: Obter histórico de mensagens de um contato no MongoDB
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: contact
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de mensagens recuperadas com sucesso.
+ */
+router.get('/instances/:id/messages', authMiddleware, whatsAppController.getChatHistory.bind(whatsAppController));
+
+/**
+ * @openapi
+ * /api/whatsapp/instances/{id}/send-message:
  *   post:
  *     summary: Enviar mensagem de teste pelo WhatsApp
  *     tags: [WhatsApp]
@@ -143,7 +187,42 @@ router.get('/instances/:id/messages/stream', authMiddleware, whatsAppController.
  *       200:
  *         description: Mensagem enviada com sucesso.
  */
-router.post('/instances/:id/test-message', authMiddleware, whatsAppController.sendTestMessage.bind(whatsAppController));
+router.post('/instances/:id/send-message', authMiddleware, whatsAppController.sendMessage.bind(whatsAppController));
+
+/**
+ * @openapi
+ * /api/whatsapp/instances/{id}/send-media:
+ *   post:
+ *     summary: Enviar mídia/documento pelo WhatsApp
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [phoneNumber, file]
+ *             properties:
+ *               phoneNumber:
+ *                 type: string
+ *               caption:
+ *                 type: string
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Mídia enviada com sucesso.
+ */
+router.post('/instances/:id/send-media', authMiddleware, upload.single('file'), whatsAppController.sendMedia.bind(whatsAppController));
 
 /**
  * @openapi
@@ -184,5 +263,25 @@ router.post('/instances/:id/restart', authMiddleware, whatsAppController.restart
  *         description: Desconectado com sucesso.
  */
 router.post('/instances/:id/logout', authMiddleware, whatsAppController.logout.bind(whatsAppController));
+
+/**
+ * @openapi
+ * /api/whatsapp/instances/{id}/connect:
+ *   post:
+ *     summary: Reconectar sessão pausada do WhatsApp sem pedir QR Code
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Reconectando com sucesso.
+ */
+router.post('/instances/:id/connect', authMiddleware, whatsAppController.connect.bind(whatsAppController));
 
 export default router;
