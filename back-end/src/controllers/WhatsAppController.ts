@@ -4,6 +4,7 @@ import prisma from '../models/prismaClient';
 import { ApiResponse } from '../utils/ApiResponse';
 import { AppError } from '../utils/AppError';
 import logger from '../utils/logger';
+import ChatMessage from '../models/ChatMessage';
 
 // SSE heartbeat interval (keep connection alive through proxies/load-balancers)
 const SSE_HEARTBEAT_MS = 25_000;
@@ -177,9 +178,66 @@ export class WhatsAppController {
   }
 
   /**
-   * POST /api/whatsapp/instances/:id/test-message
+   * GET /api/whatsapp/instances/:id/messages/stream
+   * Opens an SSE stream to receive real-time messages from this instance.
    */
-  async sendTestMessage(req: Request, res: Response, next: NextFunction): Promise<void> {
+  streamMessages(req: Request, res: Response): void {
+    const userId = req.user?.userId;
+    const instanceId = parseInt(req.params.id as string, 10);
+
+    if (!userId || isNaN(instanceId)) {
+      res.status(400).end();
+      return;
+    }
+
+    const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
+    if (!liveInstance || liveInstance.getUserId() !== userId) {
+      res.status(404).json({ message: 'Instance not found or not active.' });
+      return;
+    }
+
+    // ── Set SSE headers ───────────────────────────────────────────────────
+    res.setHeader('Content-Type',                'text/event-stream');
+    res.setHeader('Cache-Control',               'no-cache, no-transform');
+    res.setHeader('Connection',                  'keep-alive');
+    res.setHeader('X-Accel-Buffering',           'no');
+    res.flushHeaders();
+
+    logger.info(`[whatsapp-messages-sse]: Client connected for instance ${instanceId}`);
+
+    // Helper to push typed SSE events
+    const pushEvent = (event: string, data: object | null = null): void => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data ?? {})}\n\n`);
+    };
+
+    // Confirm connection immediately
+    pushEvent('connected', { instanceId, message: 'Listening for incoming messages...' });
+
+    // Handle incoming messages
+    const onMessage = (payload: any) => {
+      pushEvent('message', payload);
+    };
+
+    liveInstance.on('wa:message', onMessage);
+
+    // Heartbeat
+    const heartbeat = setInterval(() => {
+      pushEvent('heartbeat', { ts: new Date().toISOString() });
+    }, SSE_HEARTBEAT_MS);
+
+    // Cleanup on close
+    req.on('close', () => {
+      logger.info(`[whatsapp-messages-sse]: Client disconnected for instance ${instanceId}`);
+      clearInterval(heartbeat);
+      liveInstance.off('wa:message', onMessage);
+    });
+  }
+
+  /**
+   * POST /api/whatsapp/instances/:id/send-message
+   */
+  async sendMessage(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
       const instanceId = parseInt(req.params.id as string, 10);
@@ -194,9 +252,68 @@ export class WhatsAppController {
         throw new AppError('Instância não ativa ou não autorizada.', 404);
       }
 
-      await liveInstance.sendMessage(phoneNumber, message);
+      const messageId = await liveInstance.sendMessage(phoneNumber, message);
       
-      ApiResponse.success(res, null, 'Mensagem de teste enviada.');
+      try {
+        await ChatMessage.create({
+          instanceId,
+          fromNumber: phoneNumber,
+          text: message,
+          fromMe: true,
+          timestamp: Date.now(),
+          messageId: messageId || `sent-${Date.now()}`
+        });
+      } catch (err: any) {
+        logger.error(`[whatsapp-controller]: Erro ao salvar mensagem enviada no mongoDB: ${err.message}`);
+      }
+      
+      ApiResponse.success(res, null, 'Mensagem enviada.');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/whatsapp/instances/:id/send-media
+   */
+  async sendMedia(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const instanceId = parseInt(req.params.id as string, 10);
+      const { phoneNumber, caption } = req.body;
+      const file = req.file;
+
+      if (!phoneNumber || !file) {
+        throw new AppError('phoneNumber and file are required.', 400);
+      }
+
+      const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
+      if (!liveInstance || liveInstance.getUserId() !== userId) {
+        throw new AppError('Instância não ativa ou não autorizada.', 404);
+      }
+
+      const mediaPath = file.path;
+      const mimeType = file.mimetype;
+      const originalName = file.originalname;
+
+      const messageId = await liveInstance.sendMedia(phoneNumber, mediaPath, mimeType, caption || '', originalName);
+      
+      try {
+        await ChatMessage.create({
+          instanceId,
+          fromNumber: phoneNumber,
+          text: caption || '',
+          fromMe: true,
+          timestamp: Date.now(),
+          messageId: messageId || `sent-${Date.now()}`,
+          mediaUrl: `/uploads/${file.filename}`,
+          mediaType: mimeType
+        });
+      } catch (err: any) {
+        logger.error(`[whatsapp-controller]: Erro ao salvar mensagem de mídia no mongoDB: ${err.message}`);
+      }
+      
+      ApiResponse.success(res, null, 'Mídia enviada.');
     } catch (err) {
       next(err);
     }
@@ -235,8 +352,57 @@ export class WhatsAppController {
         throw new AppError('Instância não ativa.', 404);
       }
 
-      await liveInstance.logout();
-      ApiResponse.success(res, null, 'WhatsApp desconectado.');
+      await liveInstance.disconnect();
+      ApiResponse.success(res, null, 'WhatsApp pausado (desconectado).');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/whatsapp/instances/:id/connect
+   * Reconecta uma sessão previamente pausada.
+   */
+  async connect(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const instanceId = parseInt(req.params.id as string, 10);
+
+      const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
+      if (!liveInstance || liveInstance.getUserId() !== userId) {
+        throw new AppError('Instância não ativa.', 404);
+      }
+
+      await liveInstance.initialize();
+      ApiResponse.success(res, null, 'Reconectando ao WhatsApp...');
+    } catch (err) {
+      next(err);
+    }
+  }
+  /**
+   * GET /api/whatsapp/instances/:id/messages
+   */
+  async getChatHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const instanceId = parseInt(req.params.id as string, 10);
+      const contact = req.query.contact as string;
+
+      if (!contact) {
+        throw new AppError('O parâmetro de query "contact" é obrigatório.', 400);
+      }
+
+      const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
+      if (!liveInstance || liveInstance.getUserId() !== userId) {
+        throw new AppError('Instância não ativa ou não autorizada.', 404);
+      }
+
+      const messages = await ChatMessage.find({
+        instanceId,
+        fromNumber: contact
+      }).sort({ timestamp: 1 }).limit(100);
+
+      ApiResponse.success(res, messages, 'Histórico de mensagens recuperado.');
     } catch (err) {
       next(err);
     }

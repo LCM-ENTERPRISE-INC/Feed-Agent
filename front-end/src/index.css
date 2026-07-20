@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
 @import './styles/modal.css';
 
 :root {
@@ -722,6 +722,7 @@ a {
   border-right: 1px solid var(--border);
   background: var(--surface);
   transition: width var(--transition-slow);
+  overflow-x: hidden;
 }
 
 .sidebar-collapsed {
@@ -906,6 +907,7 @@ a {
 .sidebar-nav {
   flex-grow: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   margin-bottom: 12px;
 }
 
@@ -920,6 +922,8 @@ a {
 
 .nav-list {
   list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -995,6 +999,27 @@ a {
   border-radius: var(--radius-md);
   white-space: nowrap;
   overflow: hidden;
+}
+
+.sidebar-collapsed .nav-link {
+  justify-content: center;
+  padding: 0;
+  width: 46px;
+  height: 46px;
+  margin: 0 auto;
+}
+
+.sidebar-collapsed .nav-icon {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.sidebar-collapsed .sidebar-collapse-btn {
+  justify-content: center;
+  padding: 0;
+  width: 46px;
+  height: 46px;
+  margin: 0 auto;
 }
 
 .sidebar-collapse-btn:hover {

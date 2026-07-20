@@ -24,3 +24,7 @@ export const SettingsPage = lazy(() =>
 export const Profile = lazy(() =>
   import('@/pages/Profile').then((m) => ({ default: m.Profile as ComponentType })),
 );
+
+export const ChatPage = lazy(() =>
+  import('@/pages/Chat').then((m) => ({ default: m.Chat as ComponentType })),
+);

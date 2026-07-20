@@ -18,6 +18,7 @@ import {
   OcrReader,
   Profile,
   SettingsPage,
+  ChatPage,
 } from '@/routes/lazyPages';
 
 function withSuspense(node: ReactNode) {
@@ -60,6 +61,7 @@ export const router = createBrowserRouter([
       { path: '', element: <Navigate to="/dashboard" replace /> },
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'whatsapp', element: <WhatsAppHub /> },
+      { path: 'chat', element: withSuspense(<ChatPage />) },
       { path: 'contacts', element: <Contacts /> },
       { path: 'ocr', element: withSuspense(<OcrReader />) },
       { path: 'drafts', element: withSuspense(<DraftsStudio />) },

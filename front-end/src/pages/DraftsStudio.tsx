@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { 
-  Kanban, 
-  Plus, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Ban, 
-  Edit3, 
-  Trash2, 
-  Tag, 
-  Filter, 
+import { createPortal } from 'react-dom';
+import {
+  Kanban,
+  Plus,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Ban,
+  Edit3,
+  Trash2,
+  Tag,
+  Filter,
   Save,
   Calendar,
   Paperclip,
@@ -154,9 +155,9 @@ export const DraftsStudio: React.FC = () => {
   const categories = ['Todas', 'Imobiliário', 'Sindicato', 'Financeiro', 'Institucional', 'Benefícios', 'Comunicados', 'Geral'];
 
   const filteredDrafts = drafts.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          item.summary.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.summary.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCat = selectedCategory === 'Todas' || item.category === selectedCategory;
     return matchesSearch && matchesCat;
   });
@@ -329,7 +330,7 @@ export const DraftsStudio: React.FC = () => {
   const handleConfirmBullMqBroadcast = async () => {
     if (!approveDraftCandidate) return;
     setIsAllocatingBullMq(true);
-    
+
     try {
       // Auto-save if the editor is open for this candidate
       if (editingDraft && editingDraft.id === approveDraftCandidate.id) {
@@ -345,8 +346,8 @@ export const DraftsStudio: React.FC = () => {
       const res = await apiClient.post(`/drafts/${approveDraftCandidate.id}/approve`, { includeImage: false });
       if (res.data?.success) {
         showToast.success(`🚀 Sucesso! A minuta "${approveDraftCandidate.title}" foi aprovada e enfileirada.`);
-        setDrafts(prev => prev.map(d => d.id === approveDraftCandidate.id ? { 
-          ...d, 
+        setDrafts(prev => prev.map(d => d.id === approveDraftCandidate.id ? {
+          ...d,
           status: 'APPROVED',
           title: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formTitle : d.title,
           summary: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formSummary : d.summary,
@@ -495,11 +496,23 @@ export const DraftsStudio: React.FC = () => {
   const rejectedDrafts = filteredDrafts.filter(d => d.status === 'REJECTED');
   const cancelledDrafts = filteredDrafts.filter(d => d.status === 'CANCELLED');
 
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('draftId', id);
+  };
+
+  const handleDrop = (e: React.DragEvent, status: DraftStatus) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData('draftId');
+    if (id) {
+      handleQuickStatusChange(id, status);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
+
       {/* Sprint 35: Centralized Broadcast BullMQ Approval Modal */}
-      {approveDraftCandidate && (
+      {approveDraftCandidate && createPortal(
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
@@ -558,11 +571,11 @@ export const DraftsStudio: React.FC = () => {
               </Button>
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
 
       {/* Sprint 35: Centralized Rejection Justification Modal */}
-      {rejectDraftCandidate && (
+      {rejectDraftCandidate && createPortal(
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
@@ -617,11 +630,11 @@ export const DraftsStudio: React.FC = () => {
               </Button>
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
 
       {/* Sprint 34: JSON Metadata Validation & Editor Studio Modal */}
-      {jsonDraft && (
+      {jsonDraft && createPortal(
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
@@ -658,14 +671,14 @@ export const DraftsStudio: React.FC = () => {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', flex: 1, overflow: 'hidden' }}>
-              
+
               {/* Left Column: Monospace Real-Time JSON Editor */}
               <div style={{ padding: '24px', backgroundColor: 'var(--background)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <FileCode size={16} style={{ color: 'var(--primary)' }} /> <span>Código-Fonte JSON (Editável em tempo real)</span>
                   </span>
-                  
+
                   {jsonParseError ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--error)', fontSize: '0.8rem', fontWeight: 700, backgroundColor: 'color-mix(in srgb, var(--error) 10%, transparent)', padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--error)' }}>
                       <X size={14} /> Erro de Sintaxe JSON
@@ -754,11 +767,11 @@ export const DraftsStudio: React.FC = () => {
 
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
 
       {/* Sprint 33: Fact-Checking Audit Comparison Studio Modal */}
-      {auditDraft && (
+      {auditDraft && createPortal(
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
@@ -795,7 +808,7 @@ export const DraftsStudio: React.FC = () => {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1, overflow: 'hidden' }}>
-              
+
               {/* Left Column: Raw OCR Text */}
               <div style={{ padding: '24px', backgroundColor: 'var(--background)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -871,11 +884,11 @@ export const DraftsStudio: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
 
       {/* Advanced Rich Content Editor & Real-time Mobile Preview Modal */}
-      {(editingDraft || isCreatingNew) && (
+      {(editingDraft || isCreatingNew) && createPortal(
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
@@ -910,7 +923,7 @@ export const DraftsStudio: React.FC = () => {
             </div>
 
             <div className="split-pane" style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-              
+
               {/* Left Column: Form Controls */}
               <form onSubmit={handleSaveDraft} style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'var(--surface)', overflowY: 'auto', borderRight: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1101,7 +1114,7 @@ export const DraftsStudio: React.FC = () => {
                   <div style={{ padding: '32px 16px 12px 16px', backgroundColor: '#008069', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--text-main)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#cfe9e5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#008069', fontWeight: 700, fontSize: '0.9rem' }}>
-                        FA
+                        ZB
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Canal ZapBusiness</span>
@@ -1189,7 +1202,7 @@ export const DraftsStudio: React.FC = () => {
 
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
 
       <div className="page-hero">
@@ -1241,9 +1254,14 @@ export const DraftsStudio: React.FC = () => {
 
       {/* Kanban Board Grid */}
       <div className="responsive-grid" style={{ alignItems: 'flex-start' }}>
-        
+
         {/* Column 1: PENDING */}
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--primary), 0.4)' }}>
+        <div
+          className="glass-panel"
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => handleDrop(e, 'PENDING')}
+          style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--primary), 0.4)' }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid var(--primary)', paddingBottom: '12px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={18} style={{ color: 'var(--primary)' }} />
@@ -1259,8 +1277,10 @@ export const DraftsStudio: React.FC = () => {
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Nenhuma minuta pendente.</div>
             ) : (
               pendingDrafts.map(draft => (
-                <div 
+                <div
                   key={draft.id}
+                  draggable
+                  onDragStart={e => handleDragStart(e, draft.id)}
                   onClick={() => handleOpenEditor(draft)}
                   style={{
                     padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--surface) 60%, transparent)', border: '1px solid var(--border)',
@@ -1316,7 +1336,12 @@ export const DraftsStudio: React.FC = () => {
         </div>
 
         {/* Column 2: APPROVED */}
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--success) 40%, transparent)' }}>
+        <div
+          className="glass-panel"
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => handleDrop(e, 'APPROVED')}
+          style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--success) 40%, transparent)' }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid var(--success)', paddingBottom: '12px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CheckCircle size={18} style={{ color: 'var(--success)' }} />
@@ -1332,8 +1357,10 @@ export const DraftsStudio: React.FC = () => {
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Nenhuma minuta aprovada.</div>
             ) : (
               approvedDrafts.map(draft => (
-                <div 
+                <div
                   key={draft.id}
+                  draggable
+                  onDragStart={e => handleDragStart(e, draft.id)}
                   onClick={() => handleOpenEditor(draft)}
                   style={{
                     padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--surface) 60%, transparent)', border: '1px solid var(--border)',
@@ -1376,7 +1403,12 @@ export const DraftsStudio: React.FC = () => {
         </div>
 
         {/* Column 3: REJECTED */}
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--error) 40%, transparent)' }}>
+        <div
+          className="glass-panel"
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => handleDrop(e, 'REJECTED')}
+          style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--error) 40%, transparent)' }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid var(--error)', paddingBottom: '12px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <XCircle size={18} style={{ color: 'var(--error)' }} />
@@ -1392,8 +1424,10 @@ export const DraftsStudio: React.FC = () => {
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Nenhuma minuta rejeitada.</div>
             ) : (
               rejectedDrafts.map(draft => (
-                <div 
+                <div
                   key={draft.id}
+                  draggable
+                  onDragStart={e => handleDragStart(e, draft.id)}
                   onClick={() => handleOpenEditor(draft)}
                   style={{
                     padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--surface) 60%, transparent)', border: '1px solid var(--border)',
@@ -1441,7 +1475,12 @@ export const DraftsStudio: React.FC = () => {
         </div>
 
         {/* Column 4: CANCELLED */}
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--text-muted) 40%, transparent)' }}>
+        <div
+          className="glass-panel"
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => handleDrop(e, 'CANCELLED')}
+          style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'color-mix(in srgb, var(--text-muted) 40%, transparent)' }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid var(--text-muted)', paddingBottom: '12px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Ban size={18} style={{ color: 'var(--text-muted)' }} />
@@ -1457,8 +1496,10 @@ export const DraftsStudio: React.FC = () => {
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Nenhuma minuta cancelada.</div>
             ) : (
               cancelledDrafts.map(draft => (
-                <div 
+                <div
                   key={draft.id}
+                  draggable
+                  onDragStart={e => handleDragStart(e, draft.id)}
                   onClick={() => handleOpenEditor(draft)}
                   style={{
                     padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--surface) 40%, transparent)', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)',

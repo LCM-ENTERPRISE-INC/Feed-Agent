@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupSwagger = void 0;
 const swagger_jsdoc_1 = __importDefault(require("swagger-jsdoc"));
 const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
+const path_1 = __importDefault(require("path"));
 const options = {
     definition: {
         openapi: '3.0.0',
@@ -30,7 +31,7 @@ const options = {
             },
         },
     },
-    apis: ['./src/routes/*.ts'], // Path to the API docs
+    apis: [path_1.default.join(__dirname, '../routes/*.{ts,js}')], // Resuelve absoluto tanto em src/ quanto em dist/
 };
 const swaggerSpec = (0, swagger_jsdoc_1.default)(options);
 const setupSwagger = (app) => {
