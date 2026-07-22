@@ -144,4 +144,4 @@ Checklist pré-deploy sugerido (manual, depois):
 ## Commit
 
 Mensagem: `fix: integra bate-papo e fluxo de mensagens em tempo real`  
-(hash preenchido após commit local)
+**Hash:** `696d31bb8b90df3ff2ca76a047c44b7a48f8b219` (local, branch `Eduardo`; sem push)
