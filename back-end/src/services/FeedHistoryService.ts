@@ -130,6 +130,41 @@ export class FeedHistoryService {
       successRateToday: successRate
     };
   }
+
+  /**
+   * Top recipients by successful sends for one user.
+   * Counts only status: sent | delivered | read. Isolated by userId.
+   */
+  async getTopRecipients(userId: number, limit: number = 5): Promise<Array<{
+    phoneNumber: string;
+    sendCount: number;
+    lastDeliveryAt: Date | null;
+  }>> {
+    const safeLimit = Math.min(20, Math.max(1, limit));
+    const rows = await FeedHistory.aggregate([
+      {
+        $match: {
+          userId,
+          status: { $in: ['sent', 'delivered', 'read'] },
+        },
+      },
+      {
+        $group: {
+          _id: '$contactNumber',
+          sendCount: { $sum: 1 },
+          lastDeliveryAt: { $max: '$timestamp' },
+        },
+      },
+      { $sort: { sendCount: -1 } },
+      { $limit: safeLimit },
+    ]).exec();
+
+    return rows.map((row) => ({
+      phoneNumber: String(row._id),
+      sendCount: Number(row.sendCount) || 0,
+      lastDeliveryAt: row.lastDeliveryAt ? new Date(row.lastDeliveryAt) : null,
+    }));
+  }
 }
 
 export default new FeedHistoryService();

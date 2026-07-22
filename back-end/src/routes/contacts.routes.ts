@@ -69,6 +69,17 @@ router.get('/', contactController.findAll.bind(contactController));
 
 /**
  * @openapi
+ * /api/contacts/stats:
+ *   get:
+ *     summary: Contact totals, monthly growth and real top recipients
+ *     tags: [Contacts]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/stats', contactController.stats.bind(contactController));
+
+/**
+ * @openapi
  * /api/contacts/import:
  *   post:
  *     summary: Import contacts via CSV file

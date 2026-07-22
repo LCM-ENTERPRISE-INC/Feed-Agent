@@ -86,6 +86,9 @@ type SortOrder = 'asc' | 'desc';
 
 export const Contacts: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>(INITIAL_CONTACTS);
+  const [listTotal, setListTotal] = useState(0);
+  const [listTotalPages, setListTotalPages] = useState(1);
+  const [listLoading, setListLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>('');
   const searchTimeoutRef = useRef<number | null>(null);
@@ -94,13 +97,13 @@ export const Contacts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'Todos' | 'Ativo' | 'Inativo'>('Todos');
   const [categoryFilter, setCategoryFilter] = useState<string>('Todas');
 
-  // Sorting
+  // Sorting (current page only)
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
-  // Pagination
+  // Server-side pagination (API max limit = 100)
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(100);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -125,31 +128,106 @@ export const Contacts: React.FC = () => {
 
   // Statistics / Analytics Dashboard State
   const [showAnalytics, setShowAnalytics] = useState<boolean>(true);
+  const [stats, setStats] = useState<{
+    total: number;
+    active: number;
+    inactive: number;
+    activeRate: number;
+    inactiveRate: number;
+    monthlyGrowth: Array<{ name: string; NovasInscricoes: number }>;
+    topRecipients: Array<{
+      phoneNumber: string;
+      name: string;
+      sendCount: number;
+      lastDeliveryAt: string | null;
+    }>;
+  }>({
+    total: 0,
+    active: 0,
+    inactive: 0,
+    activeRate: 0,
+    inactiveRate: 0,
+    monthlyGrowth: [],
+    topRecipients: [],
+  });
 
-  // Fetch real contacts
-  const fetchContacts = async () => {
+  const fetchStats = async () => {
     try {
-      const res = await apiClient.get('/contacts?page=1&limit=1000');
+      const res = await apiClient.get('/contacts/stats');
+      if (res.data?.success && res.data.data) {
+        const d = res.data.data;
+        setStats({
+          total: Number(d.total) || 0,
+          active: Number(d.active) || 0,
+          inactive: Number(d.inactive) || 0,
+          activeRate: Number(d.activeRate) || 0,
+          inactiveRate: Number(d.inactiveRate) || 0,
+          monthlyGrowth: Array.isArray(d.monthlyGrowth)
+            ? d.monthlyGrowth.map((m: { name?: string; NovasInscricoes?: number; count?: number }) => ({
+                name: String(m.name || ''),
+                NovasInscricoes: Number(m.NovasInscricoes ?? m.count ?? 0),
+              }))
+            : [],
+          topRecipients: Array.isArray(d.topRecipients) ? d.topRecipients : [],
+        });
+      }
+    } catch (err) {
+      console.error('Falha ao buscar métricas de contatos:', err);
+    }
+  };
+
+  const fetchContacts = async (page = currentPage, limit = itemsPerPage) => {
+    setListLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(Math.min(100, Math.max(1, limit))),
+      });
+      if (debouncedSearchTerm.trim()) params.set('q', debouncedSearchTerm.trim());
+      if (statusFilter === 'Ativo') params.set('active', 'true');
+      if (statusFilter === 'Inativo') params.set('active', 'false');
+
+      const res = await apiClient.get(`/contacts?${params.toString()}`);
       if (res.data?.success) {
-        const mapped = (res.data.data.data as ApiContact[]).map((c) => ({
+        const payload = res.data.data;
+        const rows = (payload.data as ApiContact[]) || [];
+        const mapped = rows.map((c) => ({
           id: String(c.id),
           name: c.name,
           phone: c.phoneNumber,
           status: (c.active ? 'Ativo' : 'Inativo') as Contact['status'],
-          category: 'Geral' as Contact['category'], // Backend may not support categories yet
+          category: 'Geral' as Contact['category'],
           dateAdded: new Date(c.createdAt).toLocaleDateString('pt-BR'),
         }));
         setContacts(mapped);
+        setListTotal(Number(payload.total) || 0);
+        setListTotalPages(Math.max(1, Number(payload.totalPages) || 1));
+        if (payload.page && Number(payload.page) !== page) {
+          setCurrentPage(Number(payload.page));
+        }
       }
     } catch (err) {
       console.error('Falha ao buscar contatos:', err);
+    } finally {
+      setListLoading(false);
     }
   };
 
+  const refreshContactsData = async () => {
+    await Promise.all([fetchContacts(currentPage, itemsPerPage), fetchStats()]);
+  };
+
   useEffect(() => {
-    // Defer fetch so setState after await is not treated as sync effect cascade
     const boot = window.setTimeout(() => {
-      void fetchContacts();
+      void fetchContacts(currentPage, itemsPerPage);
+    }, 0);
+    return () => window.clearTimeout(boot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional server-page deps
+  }, [currentPage, itemsPerPage, debouncedSearchTerm, statusFilter]);
+
+  useEffect(() => {
+    const boot = window.setTimeout(() => {
+      void fetchStats();
     }, 0);
     return () => window.clearTimeout(boot);
   }, []);
@@ -172,22 +250,9 @@ export const Contacts: React.FC = () => {
     return () => window.clearTimeout(boot);
   }, [statusFilter, categoryFilter, itemsPerPage]);
 
-  // Memoized Filtered and Sorted Contacts
+  // Sort / category filter on the current server page only
   const filteredAndSortedContacts = useMemo(() => {
     let result = [...contacts];
-
-    if (debouncedSearchTerm.trim()) {
-      const term = debouncedSearchTerm.toLowerCase();
-      result = result.filter(
-        c => c.name.toLowerCase().includes(term) ||
-             c.phone.includes(term) ||
-             c.category.toLowerCase().includes(term)
-      );
-    }
-
-    if (statusFilter !== 'Todos') {
-      result = result.filter(c => c.status === statusFilter);
-    }
 
     if (categoryFilter !== 'Todas') {
       result = result.filter(c => c.category === categoryFilter);
@@ -211,13 +276,13 @@ export const Contacts: React.FC = () => {
     });
 
     return result;
-  }, [contacts, debouncedSearchTerm, statusFilter, categoryFilter, sortField, sortOrder]);
+  }, [contacts, categoryFilter, sortField, sortOrder]);
 
-  const totalPages = Math.ceil(filteredAndSortedContacts.length / itemsPerPage);
-  const paginatedContacts = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredAndSortedContacts.slice(start, start + itemsPerPage);
-  }, [filteredAndSortedContacts, currentPage, itemsPerPage]);
+  const totalPages = listTotalPages;
+  const paginatedContacts = filteredAndSortedContacts;
+
+  const pageStart = listTotal === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const pageEnd = Math.min(currentPage * itemsPerPage, listTotal);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -253,7 +318,7 @@ export const Contacts: React.FC = () => {
       );
       showToast.success(`Operação em Lote Concluída: Status de ${selectedIds.length} contatos alterado para ${newStatus}.`);
       setSelectedIds([]);
-      fetchContacts();
+      void refreshContactsData();
     } catch {
       showToast.error('Erro ao alterar status em massa.');
     } finally {
@@ -272,7 +337,7 @@ export const Contacts: React.FC = () => {
       showToast.success(`Exclusão em Massa Concluída: ${selectedIds.length} contatos foram removidos permanentemente.`);
       setSelectedIds([]);
       setShowBulkDeleteModal(false);
-      fetchContacts();
+      void refreshContactsData();
     } catch {
       showToast.error('Erro ao excluir contatos em massa.');
     } finally {
@@ -432,7 +497,7 @@ export const Contacts: React.FC = () => {
         ].join(' | '),
       );
 
-      fetchContacts();
+      void refreshContactsData();
     } catch (error) {
       console.error(error);
       showToast.error('Falha na importação do arquivo. Confira o formato name,phoneNumber.');
@@ -500,7 +565,7 @@ export const Contacts: React.FC = () => {
         showToast.success(`Novo contato cadastrado com sucesso via API.`);
       }
       
-      await fetchContacts();
+      await refreshContactsData();
       setShowEditModal(false);
       setEditingContact(null);
     } catch {
@@ -514,7 +579,7 @@ export const Contacts: React.FC = () => {
     try {
       await apiClient.delete(`/contacts/${id}`);
       showToast.success(`Contato "${name}" excluído com sucesso.`);
-      fetchContacts();
+      void refreshContactsData();
     } catch {
       showToast.error('Erro ao excluir o contato.');
     }
@@ -528,7 +593,7 @@ export const Contacts: React.FC = () => {
     try {
       await apiClient.put(`/contacts/${id}`, { active: nextStat === 'Ativo' });
       showToast.info(`O status foi alterado para ${nextStat}.`);
-      fetchContacts();
+      void refreshContactsData();
     } catch {
       showToast.error('Erro ao alterar status.');
     }
@@ -543,47 +608,8 @@ export const Contacts: React.FC = () => {
     }
   };
 
-  // Dynamic Statistics Calculations for Charts
-  const statsData = useMemo(() => {
-    const active = contacts.filter(c => c.status === 'Ativo').length;
-    const inactive = contacts.length - active;
-    const activeRate = contacts.length > 0 ? Math.round((active / contacts.length) * 100) : 0;
-    const inactiveRate = contacts.length > 0 ? 100 - activeRate : 0;
-
-    // Monthly Growth Calculations
-    const monthsMap: Record<string, number> = {
-      'Dez/25': 0, 'Jan/26': 0, 'Fev/26': 0, 'Mar/26': 0, 'Abr/26': 0, 'Mai/26': 0
-    };
-
-    contacts.forEach(c => {
-      const parts = c.dateAdded.split('/');
-      if (parts.length === 3) {
-        const m = Number(parts[1]);
-        if (m === 12) monthsMap['Dez/25'] = (monthsMap['Dez/25'] || 0) + 1;
-        else if (m === 1) monthsMap['Jan/26'] = (monthsMap['Jan/26'] || 0) + 1;
-        else if (m === 2) monthsMap['Fev/26'] = (monthsMap['Fev/26'] || 0) + 1;
-        else if (m === 3) monthsMap['Mar/26'] = (monthsMap['Mar/26'] || 0) + 1;
-        else if (m === 4) monthsMap['Abr/26'] = (monthsMap['Abr/26'] || 0) + 1;
-        else if (m === 5) monthsMap['Mai/26'] = (monthsMap['Mai/26'] || 0) + 1;
-      }
-    });
-
-    const monthlyGrowth = Object.entries(monthsMap).map(([name, NovasInscricoes]) => ({
-      name,
-      NovasInscricoes
-    }));
-
-    // Top Contacts with Broadcasts
-    const topContacts = contacts.slice(0, 4).map((c, index) => ({
-      ...c,
-      broadcastsCount: 24 - index * 5,
-      lastDelivery: 'Há 2 horas'
-    }));
-
-    return {
-      active, inactive, activeRate, inactiveRate, monthlyGrowth, topContacts
-    };
-  }, [contacts]);
+  // Statistics from /contacts/stats (never derived from the current page slice)
+  const statsData = stats;
 
   const currentValidity = editingContact ? checkPhoneValidity(editingContact.phone) : null;
   const validCount = parsedRows.filter(r => r.valid).length;
@@ -870,7 +896,7 @@ export const Contacts: React.FC = () => {
           <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Activity size={22} style={{ color: 'var(--primary)' }} />
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>Taxa de Conformidade e Status</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>Status dos contatos</h3>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
@@ -901,6 +927,10 @@ export const Contacts: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total na base</span>
+                  <span style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)' }}>{statsData.total}</span>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'var(--success)' }} />
@@ -950,17 +980,32 @@ export const Contacts: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {statsData.topContacts.map(tc => (
-                <div key={tc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: '8px', backgroundColor: 'color-mix(in srgb, var(--border) 15%, transparent)', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>{tc.name}</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Último: {tc.lastDelivery}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Badge variant="primary">{tc.broadcastsCount} envios</Badge>
-                  </div>
+              {statsData.topRecipients.length === 0 ? (
+                <div style={{ padding: '16px 12px', borderRadius: '8px', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+                  <p style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>
+                    Nenhum disparo realizado ainda.
+                  </p>
+                  <p style={{ fontSize: '0.8rem', margin: 0 }}>
+                    Os destinatários com maior volume aparecerão aqui após os primeiros envios.
+                  </p>
                 </div>
-              ))}
+              ) : (
+                statsData.topRecipients.map((tc) => (
+                  <div key={tc.phoneNumber} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: '8px', backgroundColor: 'color-mix(in srgb, var(--border) 15%, transparent)', border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>{tc.name}</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {tc.lastDeliveryAt
+                          ? `Último: ${new Date(tc.lastDeliveryAt).toLocaleString('pt-BR')}`
+                          : 'Sem data de entrega'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Badge variant="primary">{tc.sendCount} envios</Badge>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -1203,13 +1248,17 @@ export const Contacts: React.FC = () => {
               style={{ width: 'auto', height: 36, padding: '0 10px' }}
               aria-label="Itens por página"
             >
-              <option value={5}>5</option>
               <option value={10}>10</option>
               <option value={25}>25</option>
               <option value={50}>50</option>
+              <option value={100}>100</option>
             </select>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {filteredAndSortedContacts.length} registro(s)
+              {listLoading
+                ? 'Carregando…'
+                : listTotal === 0
+                  ? '0 contatos'
+                  : `Exibindo ${pageStart}–${pageEnd} de ${listTotal} contatos`}
             </span>
           </div>
 

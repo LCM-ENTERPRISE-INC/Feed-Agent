@@ -71,6 +71,35 @@ describe('ContactService', () => {
       const result = await contactService.findAllByUser(10, { page: 1, limit: 20 }, true);
       expect(result.data.every(c => c.active === true)).toBe(true);
     });
+
+    it('should expose total beyond page size for pagination metadata', async () => {
+      const pageItems = Array.from({ length: 100 }, (_, i) => ({ ...mockContact, id: i + 1 }));
+      (prisma.$transaction as jest.Mock).mockResolvedValue([pageItems, 678]);
+      const result = await contactService.findAllByUser(10, { page: 1, limit: 100 });
+      expect(result.data).toHaveLength(100);
+      expect(result.total).toBe(678);
+      expect(result.totalPages).toBe(7);
+    });
+  });
+
+  describe('getStats()', () => {
+    it('returns totals for the user without using page size', async () => {
+      (prisma.contact.count as jest.Mock)
+        .mockResolvedValueOnce(678) // total
+        .mockResolvedValueOnce(678) // active
+        .mockResolvedValueOnce(0); // inactive
+      // monthly counts (6 months)
+      for (let i = 0; i < 6; i += 1) {
+        (prisma.contact.count as jest.Mock).mockResolvedValueOnce(i === 5 ? 678 : 0);
+      }
+
+      const stats = await contactService.getStats(10);
+      expect(stats.total).toBe(678);
+      expect(stats.active).toBe(678);
+      expect(stats.inactive).toBe(0);
+      expect(stats.activeRate).toBe(100);
+      expect(stats.monthlyGrowth).toHaveLength(6);
+    });
   });
 
   // ─────────────── findOneByUser() ───────────────

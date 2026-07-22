@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import contactService from '../services/ContactService';
+import feedHistoryService from '../services/FeedHistoryService';
+import prisma from '../models/prismaClient';
 import { parseCsvContacts } from '../utils/csvParser';
 import { ApiResponse } from '../utils/ApiResponse';
 import { AppError } from '../utils/AppError';
@@ -52,19 +54,71 @@ export class ContactController {
   }
 
   /**
-   * GET /api/contacts?page=1&limit=20&onlyActive=true
+   * GET /api/contacts?page=1&limit=20&onlyActive=true&q=ana&active=true|false
    * Returns a paginated list of contacts for the authenticated user.
    */
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId     = req.user!.userId;
       const onlyActive = req.query.onlyActive === 'true';
+      const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+
+      let active: boolean | undefined;
+      if (req.query.active === 'true') active = true;
+      else if (req.query.active === 'false') active = false;
+      else if (onlyActive) active = true;
 
       const page  = Math.max(1, parseInt(String(req.query.page  || '1'),  10) || 1);
       const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '20'), 10) || 20));
 
-      const result = await contactService.findAllByUser(userId, { page, limit }, onlyActive);
+      const result = await contactService.findAllByUser(userId, { page, limit }, { active, q });
       ApiResponse.success(res, result, 'Contacts retrieved successfully.');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/contacts/stats
+   * Totals + monthly growth + top recipients (real sends only) for the auth user.
+   */
+  async stats(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const contactStats = await contactService.getStats(userId);
+      const top = await feedHistoryService.getTopRecipients(userId, 5);
+
+      const phones = top.map((t) => t.phoneNumber);
+      const named = phones.length
+        ? await prisma.contact.findMany({
+            where: { userId, phoneNumber: { in: phones } },
+            select: { phoneNumber: true, name: true },
+          })
+        : [];
+      const nameByPhone = new Map(named.map((c) => [c.phoneNumber, c.name]));
+
+      const topRecipients = top.map((t) => ({
+        phoneNumber: t.phoneNumber,
+        name: nameByPhone.get(t.phoneNumber) || t.phoneNumber,
+        sendCount: t.sendCount,
+        lastDeliveryAt: t.lastDeliveryAt,
+      }));
+
+      ApiResponse.success(
+        res,
+        {
+          ...contactStats,
+          monthlyGrowth: contactStats.monthlyGrowth.map((m) => ({
+            name: m.name,
+            NovasInscricoes: m.count,
+            year: m.year,
+            month: m.month,
+            count: m.count,
+          })),
+          topRecipients,
+        },
+        'Contact stats retrieved successfully.',
+      );
     } catch (err) {
       next(err);
     }

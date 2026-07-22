@@ -23,12 +23,28 @@ export interface PaginationOptions {
   limit: number;
 }
 
+export interface ContactListFilters {
+  /** When true, only active; when false, only inactive; when undefined, all. */
+  active?: boolean;
+  /** Case-insensitive search on name or phoneNumber. */
+  q?: string;
+}
+
 export interface PaginatedResult<T> {
   data:       T[];
   total:      number;
   page:       number;
   limit:      number;
   totalPages: number;
+}
+
+export interface ContactStatsResult {
+  total: number;
+  active: number;
+  inactive: number;
+  activeRate: number;
+  inactiveRate: number;
+  monthlyGrowth: Array<{ name: string; year: number; month: number; count: number }>;
 }
 
 export interface BulkImportResult {
@@ -83,17 +99,38 @@ export class ContactService {
    *
    * @param userId     - The owner user's ID.
    * @param pagination - Page number (1-indexed) and items per page.
-   * @param onlyActive - If true, returns only contacts with active = true.
-   * @returns Paginated result wrapping Contact records.
+   * @param filtersOrOnlyActive - Legacy boolean `onlyActive` or structured filters.
    */
   async findAllByUser(
     userId:     number,
     pagination: PaginationOptions = { page: 1, limit: 20 },
-    onlyActive  = false,
+    filtersOrOnlyActive: boolean | ContactListFilters = {},
   ): Promise<PaginatedResult<Contact>> {
     const { page, limit } = pagination;
     const skip = (page - 1) * limit;
-    const where = { userId, ...(onlyActive ? { active: true } : {}) };
+
+    const filters: ContactListFilters =
+      typeof filtersOrOnlyActive === 'boolean'
+        ? (filtersOrOnlyActive ? { active: true } : {})
+        : filtersOrOnlyActive;
+
+    const where: {
+      userId: number;
+      active?: boolean;
+      OR?: Array<{ name?: { contains: string; mode: 'insensitive' }; phoneNumber?: { contains: string } }>;
+    } = { userId };
+
+    if (typeof filters.active === 'boolean') {
+      where.active = filters.active;
+    }
+
+    const q = filters.q?.trim();
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { phoneNumber: { contains: q.replace(/\D/g, '') || q } },
+      ];
+    }
 
     const [data, total] = await prisma.$transaction([
       prisma.contact.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
@@ -105,7 +142,50 @@ export class ContactService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.max(1, Math.ceil(total / limit) || 1),
+    };
+  }
+
+  /**
+   * Aggregate contact totals for the authenticated user (not limited by list page size).
+   */
+  async getStats(userId: number): Promise<ContactStatsResult> {
+    const [total, active, inactive] = await Promise.all([
+      prisma.contact.count({ where: { userId } }),
+      prisma.contact.count({ where: { userId, active: true } }),
+      prisma.contact.count({ where: { userId, active: false } }),
+    ]);
+
+    const now = new Date();
+    const months: ContactStatsResult['monthlyGrowth'] = [];
+    for (let i = 5; i >= 0; i -= 1) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      const year = d.getUTCFullYear();
+      const month = d.getUTCMonth() + 1;
+      const start = new Date(Date.UTC(year, month - 1, 1));
+      const end = new Date(Date.UTC(year, month, 1));
+      const count = await prisma.contact.count({
+        where: { userId, createdAt: { gte: start, lt: end } },
+      });
+      const label = start.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+      months.push({
+        name: label.replace('.', ''),
+        year,
+        month,
+        count,
+      });
+    }
+
+    const activeRate = total > 0 ? Math.round((active / total) * 100) : 0;
+    const inactiveRate = total > 0 ? Math.round((inactive / total) * 100) : 0;
+
+    return {
+      total,
+      active,
+      inactive,
+      activeRate,
+      inactiveRate,
+      monthlyGrowth: months,
     };
   }
 
