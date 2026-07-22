@@ -38,12 +38,16 @@ dotenv.config();
 
 import helmet from 'helmet';
 import { globalLimiter } from './middlewares/rateLimiter';
+import { resolveTrustProxyHops } from './config/trustProxy';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Express App Bootstrap
 // ─────────────────────────────────────────────────────────────────────────────
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Trust a single nginx hop so rate-limit / req.ip see the real client IP
+app.set('trust proxy', resolveTrustProxyHops());
 
 // Security Headers
 app.use(helmet());

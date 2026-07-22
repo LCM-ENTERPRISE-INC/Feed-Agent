@@ -1,0 +1,26 @@
+# Desenvolvimento local — NÃO usar em produção.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Expõe portas apenas no host local para debugging.
+
+services:
+  frontend:
+    ports:
+      - "80:80"
+      - "8080:8080"
+
+  backend:
+    ports:
+      - "3000:3000"
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  mongodb:
+    ports:
+      - "27017:27017"
+
+  redis:
+    ports:
+      - "6379:6379"

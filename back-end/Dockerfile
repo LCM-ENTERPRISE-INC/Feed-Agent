@@ -44,6 +44,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DATABASE_SCHEMA_MODE=push
 
 # Install Tesseract OCR and languages since we are doing OCR
 RUN apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-por && rm -rf /var/lib/apt/lists/*
@@ -56,8 +57,11 @@ COPY --from=production-deps /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+
 # Create sessions and uploads directories with proper permissions
 RUN mkdir -p sessions uploads logs && \
+    chmod +x /app/docker-entrypoint.sh && \
     chown -R node:node /app
 
 # Run as non-root user for security hardening
@@ -65,4 +69,5 @@ USER node
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/index.js"]
+# Entrypoint applies schema (push|migrate|none) without --accept-data-loss
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

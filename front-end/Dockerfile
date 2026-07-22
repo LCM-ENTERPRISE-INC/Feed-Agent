@@ -10,10 +10,11 @@ RUN npm run build
 
 # Serve Stage
 FROM nginx:alpine
+ARG NGINX_CONF=nginx.http.conf
 # Copy compiled static files
 COPY --from=builder /app/dist /usr/share/nginx/html
-# Copy custom Nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# HTTP bootstrap (default) or HTTPS after DNS — selected at build time
+COPY ${NGINX_CONF} /etc/nginx/conf.d/default.conf
 
-EXPOSE 8080 443
+EXPOSE 80 8080 443
 CMD ["nginx", "-g", "daemon off;"]
