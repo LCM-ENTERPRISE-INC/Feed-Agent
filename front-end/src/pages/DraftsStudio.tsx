@@ -148,6 +148,16 @@ export const DraftsStudio: React.FC = () => {
 
   // Sprint 35: Centralized Fast Action Hub & Broadcast Approval State
   const [approveDraftCandidate, setApproveDraftCandidate] = useState<DraftItem | null>(null);
+  const [audiencePreview, setAudiencePreview] = useState<{
+    eligibleContacts: number;
+    totalContacts: number;
+    invalidContacts: number;
+    alreadySentContacts: number;
+    inactiveContacts: number;
+    batchSize: number;
+    estimatedBatches: number;
+  } | null>(null);
+  const [audienceLoading, setAudienceLoading] = useState(false);
   const [isAllocatingBullMq, setIsAllocatingBullMq] = useState<boolean>(false);
   const [rejectDraftCandidate, setRejectDraftCandidate] = useState<DraftItem | null>(null);
   const [rejectionReasonText, setRejectionReasonText] = useState<string>('');
@@ -321,10 +331,24 @@ export const DraftsStudio: React.FC = () => {
   };
 
   // Sprint 35: Centralized Broadcast Confirmation Hub
-  const handleOpenApprovalModal = (draft: DraftItem, e: React.MouseEvent) => {
+  const handleOpenApprovalModal = async (draft: DraftItem, e: React.MouseEvent) => {
     e.stopPropagation();
     setApproveDraftCandidate(draft);
     setIsAllocatingBullMq(false);
+    setAudiencePreview(null);
+    setAudienceLoading(true);
+    try {
+      const res = await apiClient.post('/campaigns/audience-preview', {
+        selectionMode: 'all',
+        draftId: Number(draft.id),
+        skipAlreadySent: true,
+      });
+      if (res.data?.success) setAudiencePreview(res.data.data);
+    } catch {
+      showToast.error('Não foi possível carregar a prévia de audiência.');
+    } finally {
+      setAudienceLoading(false);
+    }
   };
 
   const handleConfirmBullMqBroadcast = async () => {
@@ -332,7 +356,6 @@ export const DraftsStudio: React.FC = () => {
     setIsAllocatingBullMq(true);
 
     try {
-      // Auto-save if the editor is open for this candidate
       if (editingDraft && editingDraft.id === approveDraftCandidate.id) {
         const payload = {
           titulo: formTitle,
@@ -343,22 +366,40 @@ export const DraftsStudio: React.FC = () => {
         await apiClient.put(`/drafts/${editingDraft.id}`, payload);
       }
 
-      const res = await apiClient.post(`/drafts/${approveDraftCandidate.id}/approve`, { includeImage: false });
-      if (res.data?.success) {
-        showToast.success(`🚀 Sucesso! A minuta "${approveDraftCandidate.title}" foi aprovada e enfileirada.`);
-        setDrafts(prev => prev.map(d => d.id === approveDraftCandidate.id ? {
-          ...d,
-          status: 'APPROVED',
-          title: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formTitle : d.title,
-          summary: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formSummary : d.summary,
-          content: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formContent : d.content,
-          source: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formSource : d.source,
-        } : d));
-      } else {
+      const approveRes = await apiClient.post(`/drafts/${approveDraftCandidate.id}/approve`, { includeImage: false });
+      if (!approveRes.data?.success) {
         showToast.error('Falha ao aprovar minuta.');
+        return;
       }
-    } catch {
-      showToast.error('Erro de conexão ao aprovar a minuta.');
+
+      const expected = audiencePreview?.eligibleContacts;
+      const launchRes = await apiClient.post('/campaigns/launch', {
+        selectionMode: 'all',
+        draftId: Number(approveDraftCandidate.id),
+        delaySeconds: 3.5,
+        expectedRecipients: expected,
+        skipAlreadySent: true,
+      });
+
+      if (!launchRes.data?.success || !launchRes.data.data?.queuedJobs) {
+        showToast.error('Minuta aprovada, mas a fila não recebeu jobs.');
+        return;
+      }
+
+      const queued = launchRes.data.data.queuedJobs as number;
+      showToast.success(`🚀 Campanha enfileirada: ${queued} destinatário(s).`);
+      setDrafts(prev => prev.map(d => d.id === approveDraftCandidate.id ? {
+        ...d,
+        status: 'APPROVED',
+        title: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formTitle : d.title,
+        summary: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formSummary : d.summary,
+        content: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formContent : d.content,
+        source: (editingDraft && editingDraft.id === approveDraftCandidate.id) ? formSource : d.source,
+      } : d));
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        || (err as Error).message;
+      showToast.error(`Erro ao enfileirar: ${msg}`);
     } finally {
       setIsAllocatingBullMq(false);
       setApproveDraftCandidate(null);
@@ -543,8 +584,20 @@ export const DraftsStudio: React.FC = () => {
                 <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--info) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--info) 20%, transparent)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <Layers size={24} style={{ color: 'var(--primary)' }} />
                   <div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--info)', display: 'block' }}>Público-Alvo:</span>
-                    <strong style={{ fontSize: '1.1rem', color: 'var(--text-main)' }}>125 Contatos Ativos</strong>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--info)', display: 'block' }}>Público-alvo:</span>
+                    <strong style={{ fontSize: '1.1rem', color: 'var(--text-main)' }}>
+                      {audienceLoading
+                        ? 'Calculando…'
+                        : audiencePreview
+                          ? `${audiencePreview.eligibleContacts} contatos elegíveis`
+                          : 'Prévia indisponível'}
+                    </strong>
+                    {audiencePreview && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>
+                        Base {audiencePreview.totalContacts} · lotes {audiencePreview.estimatedBatches}×{audiencePreview.batchSize}
+                        {audiencePreview.alreadySentContacts > 0 ? ` · skip ${audiencePreview.alreadySentContacts}` : ''}
+                      </span>
+                    )}
                   </div>
                 </div>
 

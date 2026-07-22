@@ -224,24 +224,49 @@ export class DraftController {
 
   /**
    * POST /api/drafts/broadcast/launch
-   * Launches a broadcast to specific contacts for all approved drafts.
+   * Legacy entry — delegates to CampaignService with selectionMode=specific|all.
    */
   async launchBroadcast(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
-      const { contactIds, delaySeconds } = req.body;
-
-      if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0) {
-        throw new AppError('A valid array of contactIds is required.', 400);
-      }
+      const {
+        contactIds,
+        delaySeconds,
+        selectionMode,
+        excludedIds,
+        expectedRecipients,
+        draftId,
+        skipAlreadySent,
+      } = req.body;
 
       if (typeof delaySeconds !== 'number' || delaySeconds < 1) {
         throw new AppError('A valid delaySeconds (>= 1) is required.', 400);
       }
 
-      await draftService.launchBroadcast(userId, contactIds, delaySeconds);
+      const mode = selectionMode === 'all' || selectionMode === 'specific'
+        ? selectionMode
+        : (Array.isArray(contactIds) && contactIds.length > 0 ? 'specific' : 'all');
 
-      ApiResponse.success(res, null, 'Broadcast launched successfully for selected contacts.', 200);
+      if (mode === 'specific' && (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0)) {
+        throw new AppError('A valid array of contactIds is required for selectionMode=specific.', 400);
+      }
+
+      const campaignService = (await import('../services/CampaignService')).default;
+      const result = await campaignService.createAndEnqueue(userId, {
+        selectionMode: mode,
+        contactIds,
+        excludedIds,
+        delaySeconds,
+        draftId,
+        expectedRecipients,
+        skipAlreadySent: skipAlreadySent !== false,
+      });
+
+      if (!result.queuedJobs) {
+        throw new AppError('Launch failed: queuedJobs=0.', 500);
+      }
+
+      ApiResponse.success(res, result, 'Broadcast launched successfully.', 201);
     } catch (err) {
       next(err);
     }

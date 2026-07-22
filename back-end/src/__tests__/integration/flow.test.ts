@@ -170,7 +170,7 @@ describe('Full System Flow Integration Test', () => {
     createdDraftId = res.body.data.draftId;
   });
 
-  it('4. Should approve the generated draft and queue broadcast', async () => {
+  it('4. Should approve the generated draft (status only; enqueue via /campaigns/launch)', async () => {
     const res = await request(app)
       .post(`/api/drafts/${createdDraftId}/approve`)
       .set('Authorization', `Bearer ${userToken}`)
@@ -178,14 +178,7 @@ describe('Full System Flow Integration Test', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('APPROVED');
-
-    // Ensure the job was added to BullMQ
-    expect(broadcastQueue.add).toHaveBeenCalledWith(
-      'broadcast-queue',
-      expect.objectContaining({
-        draftId: createdDraftId,
-        userId: createdUserId
-      })
-    );
+    // Approve no longer enqueues BullMQ — campaigns/launch does.
+    expect(broadcastQueue.add).not.toHaveBeenCalled();
   });
 });

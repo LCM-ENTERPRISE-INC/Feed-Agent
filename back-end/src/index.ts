@@ -13,6 +13,7 @@ import whatsappRoutes from './routes/whatsapp.routes';
 import newsRoutes from './routes/news.routes';
 import draftRoutes from './routes/draft.routes';
 import analyticsRoutes from './routes/analytics.routes';
+import campaignsRoutes from './routes/campaigns.routes';
 import whatsAppInstanceManager from './services/WhatsAppInstanceManager';
 import feedHistoryService from './services/FeedHistoryService';
 import { initCronJobs } from './crons/cleanupCron';
@@ -86,6 +87,7 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/news', newsRoutes);
 app.use('/api/drafts', draftRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/campaigns', campaignsRoutes);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Global Error Handler — MUST be the last middleware

@@ -1,54 +1,82 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  RefreshCw, 
-  Send, 
-  Play, 
-  Pause, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
-  Sliders, 
-  Smartphone, 
-  Layers, 
-  Server, 
-  Activity, 
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  RefreshCw,
+  Send,
+  Play,
+  Pause,
+  Clock,
+  AlertCircle,
+  Sliders,
+  Layers,
+  Server,
+  Activity,
   ShieldAlert,
   FastForward,
-  ListFilter,
   Ban,
-  CheckCircle,
   TrendingUp,
-  Terminal,
-  Trash2,
-  Download,
   History,
-  FileSpreadsheet,
-  RotateCcw,
-  HelpCircle,
-  Zap
 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { showToast } from '@/utils/toastHelper';
 import apiClient from '@/services/apiClient';
 
+type CampaignStatus =
+  | 'DRAFT'
+  | 'PREPARING'
+  | 'QUEUE_FAILED'
+  | 'QUEUED'
+  | 'RUNNING'
+  | 'PAUSED'
+  | 'COMPLETED'
+  | 'PARTIAL_FAILED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+interface AudiencePreview {
+  totalContacts: number;
+  activeContacts: number;
+  eligibleContacts: number;
+  invalidContacts: number;
+  excludedContacts: number;
+  alreadySentContacts: number;
+  inactiveContacts: number;
+  batchSize: number;
+  estimatedBatches: number;
+}
+
+interface CampaignProgress {
+  campaignId: string;
+  batchId: string;
+  title: string;
+  status: CampaignStatus;
+  expectedRecipients: number;
+  materializedRecipients: number;
+  queuedJobs: number;
+  progressPercent: number;
+  delayMs: number;
+  batchSize: number;
+  counters: {
+    queued: number;
+    active: number;
+    sent: number;
+    failed: number;
+    skipped: number;
+    cancelled: number;
+    pending: number;
+    processed: number;
+    total: number;
+  };
+  errorMessage?: string | null;
+}
+
 interface QueueJob {
   id: string;
   recipientName: string;
   recipientPhone: string;
-  messageSnippet: string;
-  status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  status: string;
   attempts: number;
-  timestamp: string;
   error?: string;
-  errorDescription?: string;
-}
-
-interface SseLogItem {
-  id: string;
-  timestamp: string;
-  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
-  message: string;
 }
 
 interface HistoricalBatch {
@@ -59,285 +87,391 @@ interface HistoricalBatch {
   successRate: string;
   deliveredCount: number;
   duration: string;
-  status: 'COMPLETED' | 'WARNING';
+  status: string;
 }
 
-interface Contact {
-  id: number;
-  name: string;
-  phoneNumber: string;
-  active: boolean;
+interface SseLogItem {
+  id: string;
+  timestamp: string;
+  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+  message: string;
+}
+
+function statusLabel(status?: CampaignStatus | string | null): string {
+  switch (status) {
+    case 'RUNNING':
+      return 'TRANSMITINDO';
+    case 'QUEUED':
+      return 'NA FILA';
+    case 'PREPARING':
+      return 'PREPARANDO';
+    case 'PAUSED':
+      return 'PAUSADA';
+    case 'COMPLETED':
+      return 'CONCLUÍDA';
+    case 'PARTIAL_FAILED':
+      return 'PARCIAL';
+    case 'FAILED':
+    case 'QUEUE_FAILED':
+      return 'FALHOU';
+    case 'CANCELLED':
+      return 'CANCELADA';
+    default:
+      return 'OCIOSA';
+  }
+}
+
+function authToken(): string | null {
+  return (
+    localStorage.getItem('feedagent-session') ||
+    localStorage.getItem('feedagent-token') ||
+    localStorage.getItem('token') ||
+    null
+  );
 }
 
 export const BroadcastQueue: React.FC = () => {
+  const [delaySeconds, setDelaySeconds] = useState(3.5);
+  const [selectionMode, setSelectionMode] = useState<'all' | 'specific'>('all');
+  const [preview, setPreview] = useState<AudiencePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [progress, setProgress] = useState<CampaignProgress | null>(null);
   const [jobs, setJobs] = useState<QueueJob[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-
-  // Launch Configuration State
-  const [delaySeconds, setDelaySeconds] = useState<number>(3.5);
-  const [adminTestPhone, setAdminTestPhone] = useState<string>('+55 11 99999-8888');
-  const [isTestFiring, setIsTestFiring] = useState<boolean>(false);
-  const [isLaunchingBatch, setIsLaunchingBatch] = useState<boolean>(false);
-  const [isQueuePaused, setIsQueuePaused] = useState<boolean>(false);
-
-  // SSE Terminal Logs State
-  const [logs, setLogs] = useState<SseLogItem[]>([]);
-  const [autoScroll, setAutoScroll] = useState<boolean>(true);
-  const terminalBottomRef = useRef<HTMLDivElement | null>(null);
-
-  // Historical Batches State
   const [historicalBatches, setHistoricalBatches] = useState<HistoricalBatch[]>([]);
-  const [isExportingCsvId, setIsExportingCsvId] = useState<string | null>(null);
+  const [monthLabel, setMonthLabel] = useState(
+    new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+  );
+  const [isLaunchingBatch, setIsLaunchingBatch] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [logs, setLogs] = useState<SseLogItem[]>([]);
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [showExclusionDetails, setShowExclusionDetails] = useState(false);
+  const terminalBottomRef = useRef<HTMLDivElement | null>(null);
+  const pollRef = useRef<number | null>(null);
 
-  // Contacts State
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
-
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const res = await apiClient.get('/analytics/history');
-        if (res.data?.success) {
-           setHistoricalBatches(res.data.data.history || []);
-        }
-      } catch {
-        showToast.error('Erro ao buscar histórico de lotes.');
-      }
-    };
-
-    const fetchContacts = async () => {
-      try {
-        const res = await apiClient.get('/contacts?limit=1000');
-        console.log('fetchContacts response:', res.data);
-        
-        let contactsArray = [];
-        if (res.data?.success) {
-          if (Array.isArray(res.data.data)) {
-            contactsArray = res.data.data;
-          } else if (res.data.data && Array.isArray(res.data.data.data)) {
-            contactsArray = res.data.data.data;
-          } else if (res.data.data && Array.isArray(res.data.data.contacts)) {
-            contactsArray = res.data.data.contacts;
-          }
-        }
-        
-        console.log('Resolved contacts array:', contactsArray);
-        setContacts(contactsArray);
-        
-      } catch (err) {
-        console.error('fetchContacts error:', err);
-        showToast.error('Erro ao buscar contatos.');
-      }
-    };
-
-    fetchHistory();
-    fetchContacts();
+  const pushLog = useCallback((type: SseLogItem['type'], message: string) => {
+    setLogs((prev) => [
+      ...prev.slice(-200),
+      {
+        id: `${Date.now()}-${Math.random()}`,
+        timestamp: new Date().toLocaleTimeString('pt-BR'),
+        type,
+        message,
+      },
+    ]);
   }, []);
 
-  // Sprint 40: Retrying State
-  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
-  const [isRetryingAll, setIsRetryingAll] = useState<boolean>(false);
+  const loadPreview = useCallback(async () => {
+    setPreviewLoading(true);
+    try {
+      const res = await apiClient.post('/campaigns/audience-preview', {
+        selectionMode: 'all',
+        skipAlreadySent: true,
+      });
+      if (res.data?.success) setPreview(res.data.data);
+    } catch (err) {
+      showToast.error(`Erro na prévia de audiência: ${(err as Error).message}`);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, []);
 
-  // Dynamic calculation for estimated total transmission time
-  const totalEstimatedSeconds = (selectedContactIds.length || 1) * delaySeconds;
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/campaigns/history?page=1&limit=20');
+      if (res.data?.success) {
+        setHistoricalBatches(res.data.data.data || []);
+        if (res.data.data.monthLabel) setMonthLabel(res.data.data.monthLabel);
+      }
+    } catch {
+      showToast.error('Erro ao buscar histórico de campanhas.');
+    }
+  }, []);
+
+  const loadActive = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/campaigns/active');
+      if (res.data?.success && res.data.data) {
+        setProgress(res.data.data);
+        return res.data.data as CampaignProgress;
+      }
+      setProgress(null);
+      return null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const loadJobs = useCallback(async (campaignId: string) => {
+    try {
+      const res = await apiClient.get(`/campaigns/${campaignId}/jobs?page=1&limit=50`);
+      if (res.data?.success) setJobs(res.data.data.data || []);
+    } catch {
+      /* ignore transient */
+    }
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      await Promise.all([loadPreview(), loadHistory()]);
+      const active = await loadActive();
+      if (active?.campaignId) await loadJobs(active.campaignId);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadActive, loadHistory, loadJobs, loadPreview]);
+
+  useEffect(() => {
+    void refreshAll();
+  }, [refreshAll]);
+
+  // Poll progress while campaign is active
+  useEffect(() => {
+    if (!progress?.campaignId) return;
+    const active =
+      progress.status === 'QUEUED' ||
+      progress.status === 'RUNNING' ||
+      progress.status === 'PREPARING' ||
+      progress.status === 'PAUSED';
+    if (!active) return;
+
+    pollRef.current = window.setInterval(() => {
+      void (async () => {
+        try {
+          const res = await apiClient.get(`/campaigns/${progress.campaignId}/progress`);
+          if (res.data?.success) {
+            setProgress(res.data.data);
+            await loadJobs(progress.campaignId);
+          }
+        } catch {
+          /* ignore */
+        }
+      })();
+    }, 4000);
+
+    return () => {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+    };
+  }, [progress?.campaignId, progress?.status, loadJobs]);
+
+  // SSE reconnect + snapshot
+  useEffect(() => {
+    const token = authToken();
+    if (!token) return;
+
+    const base = apiClient.defaults.baseURL || '/api';
+    const url = `${base}/campaigns/events?token=${encodeURIComponent(token)}`;
+    const es = new EventSource(url);
+
+    es.addEventListener('snapshot', (ev) => {
+      try {
+        const data = JSON.parse((ev as MessageEvent).data);
+        if (data) {
+          setProgress(data);
+          pushLog('INFO', `Snapshot: campanha ${data.campaignId} (${data.status})`);
+        } else {
+          pushLog('INFO', 'Nenhuma campanha ativa no snapshot SSE.');
+        }
+      } catch {
+        /* ignore */
+      }
+    });
+
+    const forward = (type: string) => (ev: Event) => {
+      try {
+        const data = JSON.parse((ev as MessageEvent).data);
+        pushLog('INFO', `${type}: ${data.campaignId || ''}`);
+        if (data.campaignId) {
+          void apiClient.get(`/campaigns/${data.campaignId}/progress`).then((res) => {
+            if (res.data?.success) setProgress(res.data.data);
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    [
+      'campaign.preparing',
+      'campaign.queued',
+      'campaign.running',
+      'campaign.paused',
+      'campaign.resumed',
+      'campaign.cancelled',
+      'campaign.finished',
+      'campaign.recipient',
+      'campaign.queue_failed',
+    ].forEach((t) => es.addEventListener(t, forward(t)));
+
+    es.onerror = () => {
+      pushLog('WARNING', 'SSE desconectado — tentará reconectar automaticamente.');
+    };
+
+    return () => es.close();
+  }, [pushLog]);
+
+  useEffect(() => {
+    terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  const eligible = preview?.eligibleContacts ?? 0;
+  const totalEstimatedSeconds = (eligible || 1) * delaySeconds;
   const estimatedMinutes = Math.floor(totalEstimatedSeconds / 60);
   const estimatedRemainderSeconds = Math.round(totalEstimatedSeconds % 60);
 
-  // Auto-scroll logic
-  useEffect(() => {
-    if (autoScroll && terminalBottomRef.current) {
-      terminalBottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logs, autoScroll]);
+  const counters = progress?.counters;
+  const queuedCount = counters?.queued ?? 0;
+  const processingCount = counters?.active ?? 0;
+  const completedCount = counters?.sent ?? 0;
+  const failedCount = counters?.failed ?? 0;
+  const progressPercentage = progress?.progressPercent ?? 0;
+  const totalTrackableJobs = counters?.total ?? 0;
+  const processedJobsCount = counters?.processed ?? 0;
 
-  // Removed simulation interval for processing queue
-
-  const triggerRefresh = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      showToast.success('Fila sincronizada com o cluster Redis (BullMQ).');
-    }, 1200);
-  };
-
-  const handleFireTestMessage = () => {
-    if (!adminTestPhone.trim()) {
-      showToast.error('Informe o telefone do administrador para receber o teste.');
-      return;
-    }
-    setIsTestFiring(true);
-    showToast.info(`Disparando pacote de teste prévio para ${adminTestPhone}...`);
-
-    setTimeout(() => {
-      setIsTestFiring(false);
-      showToast.success(`📱 Disparo de Teste concluído com sucesso! Verifique o WhatsApp no aparelho ${adminTestPhone}.`);
-    }, 1500);
-  };
+  const beltStatus = statusLabel(progress?.status);
+  const isPaused = progress?.status === 'PAUSED';
+  const canPause = progress?.status === 'QUEUED' || progress?.status === 'RUNNING';
+  const canResume = progress?.status === 'PAUSED';
+  const canCancel =
+    progress &&
+    !['COMPLETED', 'CANCELLED', 'FAILED', 'QUEUE_FAILED'].includes(progress.status);
 
   const handleLaunchMassBatch = async () => {
-    if (selectedContactIds.length === 0) {
-      showToast.error('Selecione pelo menos um contato para disparar.');
+    if (!preview || preview.eligibleContacts <= 0) {
+      showToast.error('Nenhum contato elegível para disparo.');
       return;
     }
 
     setIsLaunchingBatch(true);
-    showToast.info('Inicializando esteira de transmissão em lote com delay configurado...');
-
+    showToast.info('Criando campanha e enfileirando destinatários...');
     try {
-      const res = await apiClient.post('/drafts/broadcast/launch', {
-        contactIds: selectedContactIds,
-        delaySeconds: delaySeconds
+      const res = await apiClient.post('/campaigns/launch', {
+        selectionMode: 'all',
+        delaySeconds,
+        expectedRecipients: preview.eligibleContacts,
+        skipAlreadySent: true,
       });
 
-      if (res.data?.success) {
-        showToast.success(`🚀 Lote lançado com sucesso! Injetando ${selectedContactIds.length} mensagens na fila com intervalo de ${delaySeconds}s.`);
-        setIsQueuePaused(false);
-        triggerRefresh();
+      if (!res.data?.success) {
+        showToast.error('Falha ao lançar campanha.');
+        return;
       }
+
+      const data = res.data.data;
+      if (!data.queuedJobs || data.queuedJobs <= 0) {
+        showToast.error('Campanha não enfileirou jobs (queuedJobs=0).');
+        return;
+      }
+
+      showToast.success(
+        `Campanha ${data.campaignId.slice(0, 8)}…: ${data.queuedJobs} jobs enfileirados (${data.estimatedBatches} lotes).`,
+      );
+      pushLog('SUCCESS', `queuedJobs=${data.queuedJobs} expected=${data.expectedRecipients}`);
+      await refreshAll();
     } catch (err) {
-      showToast.error(`Erro ao lançar lote: ${(err as Error).message}`);
+      const msg = (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
+        ?.message || (err as Error).message;
+      showToast.error(`Erro ao lançar: ${msg}`);
+      pushLog('ERROR', String(msg));
     } finally {
       setIsLaunchingBatch(false);
     }
   };
 
-  const handleTogglePauseQueue = () => {
-    setIsQueuePaused(prev => {
-      const nextState = !prev;
-      if (nextState) {
-        showToast.info('⏸️ Fila de transmissão pausada. Novos disparos retidos no Redis.');
-      } else {
-        showToast.success('▶️ Fila retomada. Processando jobs com delay configurado.');
+  const handleTogglePauseQueue = async () => {
+    if (!progress?.campaignId) return;
+    try {
+      if (isPaused) {
+        await apiClient.post(`/campaigns/${progress.campaignId}/resume`);
+        showToast.success('Campanha retomada.');
+      } else if (canPause) {
+        await apiClient.post(`/campaigns/${progress.campaignId}/pause`);
+        showToast.info('Campanha pausada.');
       }
-      return nextState;
-    });
+      await loadActive();
+    } catch (err) {
+      showToast.error(`Não foi possível alterar pausa: ${(err as Error).message}`);
+    }
   };
 
-  const handleCancelActiveBroadcast = () => {
-    setJobs(prev => prev.map(j => (j.status === 'QUEUED' || j.status === 'PROCESSING') ? { ...j, status: 'CANCELLED', error: 'ABORTED_BY_ADMIN' } : j));
-    showToast.info('🛑 Transmissão cancelada! Todos os jobs pendentes foram abortados na fila do Redis.');
-    setIsQueuePaused(true);
+  const handleCancelActiveBroadcast = async () => {
+    if (!progress?.campaignId || !canCancel) return;
+    try {
+      await apiClient.post(`/campaigns/${progress.campaignId}/cancel`);
+      showToast.info('Campanha cancelada.');
+      await refreshAll();
+    } catch (err) {
+      showToast.error(`Erro ao cancelar: ${(err as Error).message}`);
+    }
   };
 
-  const handlePurgeFailedJobs = () => {
-    setJobs(prev => prev.filter(j => j.status !== 'FAILED' && j.status !== 'CANCELLED'));
-    showToast.success('Jobs com falha ou cancelados foram limpos da fila de visualização.');
-  };
+  const filteredJobs = jobs.filter((j) => filterStatus === 'ALL' || j.status === filterStatus);
+  const failedJobsList = jobs.filter((j) => j.status === 'FAILED');
 
-  const handleClearLogsConsole = () => {
-    setLogs([]);
-    showToast.info('Console de logs do servidor limpo.');
-  };
-
-  const handleDownloadBatchCsv = (batch: HistoricalBatch) => {
-    setIsExportingCsvId(batch.id);
-    showToast.info(`Gerando relatório analítico CSV para "${batch.title}"...`);
-
-    setTimeout(() => {
-      setIsExportingCsvId(null);
-      const csvHeaders = "ID,Nome do Contato,Telefone,Status de Entrega,Data de Envio,ID Meta Graph\n";
-      const sampleRows = Array.from({ length: batch.deliveredCount }).map((_, i) => (
-        `"contato-${i+1}","Contato Segmentado #${i+1}","+55 11 9${Math.floor(10000000 + Math.random() * 90000000)}","ENTREGUE","${batch.date}","wamid.${Math.random().toString(36).substring(2, 10)}"`
-      )).join("\n");
-
-      const blob = new Blob([csvHeaders + sampleRows], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `relatorio_disparo_${batch.id}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      showToast.success(`📊 Relatório "${batch.title}" baixado com sucesso! (${batch.deliveredCount} linhas).`);
-    }, 1200);
-  };
-
-  // Sprint 40: Handle Individual Retry Job
-  const handleRetryIndividualJob = (jobId: string) => {
-    setRetryingJobId(jobId);
-    showToast.info(`Re-enfileirando job #${jobId} no BullMQ com prioridade alta...`);
-
-    setTimeout(() => {
-      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'QUEUED', error: undefined, errorDescription: undefined, attempts: j.attempts + 1 } : j));
-      setRetryingJobId(null);
-      showToast.success(`Job #${jobId} restaurado! Transmissão reiniciada.`);
-      setIsQueuePaused(false);
-    }, 1200);
-  };
-
-  const handleRetryAllFailedJobs = () => {
-    setIsRetryingAll(true);
-    showToast.info('Iniciando rotina de re-disparo em lote para todas as falhas de transmissão...');
-
-    setTimeout(() => {
-      setJobs(prev => prev.map(j => j.status === 'FAILED' ? { ...j, status: 'QUEUED', error: undefined, errorDescription: undefined, attempts: j.attempts + 1 } : j));
-      setIsRetryingAll(false);
-      showToast.success('🔄 Todas as falhas foram re-enfileiradas com sucesso na esteira Redis.');
-      setIsQueuePaused(false);
-    }, 1600);
-  };
-
-  const filteredJobs = jobs.filter(j => filterStatus === 'ALL' || j.status === filterStatus);
-
-  const completedCount = jobs.filter(j => j.status === 'COMPLETED').length;
-  const processingCount = jobs.filter(j => j.status === 'PROCESSING').length;
-  const queuedCount = jobs.filter(j => j.status === 'QUEUED').length;
-  const failedCount = jobs.filter(j => j.status === 'FAILED').length;
-  const cancelledCount = jobs.filter(j => j.status === 'CANCELLED').length;
-
-  const totalTrackableJobs = jobs.filter(j => j.status !== 'CANCELLED').length;
-  const processedJobsCount = completedCount + failedCount;
-  const progressPercentage = totalTrackableJobs > 0 ? Math.round((processedJobsCount / totalTrackableJobs) * 100) : 0;
-
-  const failedJobsList = jobs.filter(j => j.status === 'FAILED');
+  const exclusionSummary = useMemo(() => {
+    if (!preview) return null;
+    return {
+      total: preview.totalContacts,
+      eligible: preview.eligibleContacts,
+      excluded:
+        preview.invalidContacts +
+        preview.excludedContacts +
+        preview.alreadySentContacts +
+        preview.inactiveContacts,
+    };
+  }, [preview]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', paddingBottom: '40px' }}>
-      
       <div className="page-hero">
         <div className="page-hero-copy">
           <h1 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Activity size={28} style={{ color: 'var(--primary)' }} />
             Campanhas
           </h1>
-          <p>Acompanhe a fila, o progresso do lote e o histórico de envios.</p>
+          <p>Crie, enfileire e acompanhe o progresso real da transmissão.</p>
         </div>
-        <Button variant="secondary" icon={RefreshCw} onClick={triggerRefresh} isLoading={loading}>
+        <Button variant="secondary" icon={RefreshCw} onClick={() => void refreshAll()} isLoading={loading}>
           Atualizar
         </Button>
       </div>
 
       <div className="glass-panel" style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 20, borderColor: 'var(--success)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', backgroundColor: 'var(--success)' }} />
-
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: 'color-mix(in srgb, var(--success) 14%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)' }}>
               <TrendingUp size={22} />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Lote em andamento</h3>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Progresso da fila de transmissão</span>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>
+                {progress ? progress.title : 'Nenhuma campanha ativa'}
+              </h3>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                {progress
+                  ? `ID ${progress.campaignId.slice(0, 12)}… · ${progress.queuedJobs} jobs`
+                  : 'Progresso vem do backend (não do estado local)'}
+              </span>
             </div>
           </div>
-
           <div style={{ display: 'flex', gap: '10px' }}>
-            {isQueuePaused ? (
-              <Button type="button" variant="primary" icon={Play} onClick={handleTogglePauseQueue} style={{ backgroundColor: 'var(--success)', borderColor: 'var(--success)' }}>
-                Retomar Fila (Resume)
+            {canResume || canPause ? (
+              <Button
+                type="button"
+                variant={isPaused ? 'primary' : 'secondary'}
+                icon={isPaused ? Play : Pause}
+                onClick={() => void handleTogglePauseQueue()}
+                style={isPaused ? { backgroundColor: 'var(--success)', borderColor: 'var(--success)' } : { borderColor: 'var(--warning)', color: 'var(--warning)' }}
+              >
+                {isPaused ? 'Retomar' : 'Pausar'}
               </Button>
-            ) : (
-              <Button type="button" variant="secondary" icon={Pause} onClick={handleTogglePauseQueue} style={{ borderColor: 'var(--warning)', color: 'var(--warning)' }}>
-                Pausar Fila (Pause)
+            ) : null}
+            {canCancel ? (
+              <Button type="button" variant="secondary" icon={Ban} onClick={() => void handleCancelActiveBroadcast()} style={{ borderColor: 'var(--error)', color: 'var(--error)' }}>
+                Cancelar
               </Button>
-            )}
-
-            <Button type="button" variant="secondary" icon={Ban} onClick={handleCancelActiveBroadcast} style={{ borderColor: 'var(--error)', color: 'var(--error)' }}>
-              Cancelar Transmissão
-            </Button>
+            ) : null}
           </div>
         </div>
 
@@ -345,623 +479,229 @@ export const BroadcastQueue: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={18} style={{ color: 'var(--primary)' }} />
-              <span>Progresso de Disparo: <strong style={{ color: 'var(--success)', fontSize: '1.2rem' }}>{progressPercentage}%</strong></span>
+              Progresso: <strong style={{ color: 'var(--success)', fontSize: '1.2rem' }}>{progressPercentage}%</strong>
             </span>
-
             <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-              {processedJobsCount} de {totalTrackableJobs} Mensagens Processadas
+              {processedJobsCount} de {totalTrackableJobs} processados
             </span>
           </div>
-
-          <div style={{ width: '100%', height: '24px', borderRadius: '12px', backgroundColor: 'var(--surface)', overflow: 'hidden', position: 'relative', boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.5)' }}>
-            <div 
-              style={{ 
-                height: '100%', width: `${progressPercentage}%`, 
-                backgroundColor: 'var(--success)', 
-                backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.15) 75%, transparent 75%, transparent)',
-                backgroundSize: '40px 40px',
-                animation: isQueuePaused ? 'none' : 'progress-stripes 2s linear infinite',
-                transition: 'width 0.4s ease-out',
-                boxShadow: '0 0 15px var(--success)'
-              }} 
-            />
+          <div style={{ width: '100%', height: '24px', borderRadius: '12px', backgroundColor: 'var(--surface)', overflow: 'hidden', boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.5)' }}>
+            <div style={{ height: '100%', width: `${progressPercentage}%`, backgroundColor: 'var(--success)', transition: 'width 0.4s ease-out' }} />
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)', marginTop: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <CheckCircle size={20} style={{ color: 'var(--success)' }} />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sucessos:</span>
-                <strong style={{ fontSize: '1.2rem', color: 'var(--text-main)' }}>{completedCount}</strong>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ShieldAlert size={20} style={{ color: 'var(--error)' }} />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Falhas / Rate-Limit:</span>
-                <strong style={{ fontSize: '1.2rem', color: 'var(--error)' }}>{failedCount}</strong>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Layers size={20} style={{ color: 'var(--primary)' }} />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Restantes na Fila:</span>
-                <strong style={{ fontSize: '1.2rem', color: 'var(--primary)' }}>{queuedCount + processingCount}</strong>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Activity size={20} style={{ color: 'var(--warning)' }} />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Status da Esteira:</span>
-                <strong style={{ fontSize: '1rem', color: isQueuePaused ? 'var(--warning)' : 'var(--success)' }}>
-                  {isQueuePaused ? 'PAUSADA' : 'TRANSMITINDO'}
-                </strong>
-              </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+            <div><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sucessos</span><strong style={{ display: 'block', fontSize: '1.2rem' }}>{completedCount}</strong></div>
+            <div><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Falhas</span><strong style={{ display: 'block', fontSize: '1.2rem', color: 'var(--error)' }}>{failedCount}</strong></div>
+            <div><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Na fila</span><strong style={{ display: 'block', fontSize: '1.2rem', color: 'var(--primary)' }}>{queuedCount + processingCount}</strong></div>
+            <div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Status</span>
+              <strong style={{ display: 'block', fontSize: '1rem', color: isPaused ? 'var(--warning)' : progress?.status === 'RUNNING' ? 'var(--success)' : 'var(--text-main)' }}>
+                {beltStatus}
+              </strong>
             </div>
           </div>
         </div>
-
       </div>
 
-      {/* Sprint 40: Seleção de Contatos para Disparo */}
       <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'var(--primary)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Layers size={22} style={{ color: 'var(--primary)' }} />
             <div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Seleção de Contatos para o Lote</h3>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Selecione quem irá receber todas as minutas aprovadas.</span>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Público-alvo</h3>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                Seleção global no servidor — não depende da página carregada
+              </span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <Button type="button" variant="secondary" onClick={() => setSelectedContactIds(contacts.map(c => c.id))} style={{ height: '36px', fontSize: '0.8rem' }}>
-              Selecionar Todos
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button type="button" variant={selectionMode === 'all' ? 'primary' : 'secondary'} onClick={() => { setSelectionMode('all'); void loadPreview(); }} style={{ height: 36, fontSize: '0.8rem' }}>
+              Todos elegíveis
             </Button>
-            <Button type="button" variant="secondary" onClick={() => setSelectedContactIds([])} style={{ height: '36px', fontSize: '0.8rem' }}>
-              Limpar Seleção
-            </Button>
-          </div>
-        </div>
-
-        <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))', gap: '10px', backgroundColor: 'var(--surface)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-          {contacts.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', gridColumn: '1 / -1' }}>Nenhum contato encontrado ou carregando...</div>
-          ) : (
-            contacts.map(contact => (
-              <label key={contact.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', backgroundColor: 'color-mix(in srgb, var(--border) 15%, transparent)', padding: '10px', borderRadius: '8px', border: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
-                <input 
-                  type="checkbox" 
-                  checked={selectedContactIds.includes(contact.id)}
-                  onChange={e => {
-                    if (e.target.checked) setSelectedContactIds(prev => [...prev, contact.id]);
-                    else setSelectedContactIds(prev => prev.filter(id => id !== contact.id));
-                  }}
-                  style={{ accentColor: 'var(--primary)', width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 600 }}>{contact.name}</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{contact.phoneNumber}</span>
-                </div>
-              </label>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Grid Layout: Launch Configuration Hub */}
-      <div className="responsive-grid">
-        
-        {/* Left Card: Delay Slider */}
-        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--primary)', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', backgroundColor: 'var(--primary)' }} />
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Sliders size={24} style={{ color: 'var(--primary)' }} />
-              <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Controle de Lançamento de Lote</h3>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Ajuste de intervalo antispam e volume de transmissão</span>
-              </div>
-            </div>
-            <Badge variant="primary">BullMQ Cluster</Badge>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'var(--surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Clock size={16} style={{ color: 'var(--primary)' }} />
-                  <span>Delay Entre Mensagens (Proteção Antispam)</span>
-                </label>
-                <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)', backgroundColor: 'color-mix(in srgb, var(--primary) 15%, transparent)', padding: '4px 12px', borderRadius: '20px', border: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)' }}>
-                  {delaySeconds} segundos
-                </span>
-              </div>
-
-              <input 
-                type="range" 
-                min="1" 
-                max="15" 
-                step="0.5" 
-                value={delaySeconds} 
-                onChange={e => setDelaySeconds(parseFloat(e.target.value))}
-                style={{
-                  width: '100%', height: '8px', borderRadius: '4px', backgroundColor: 'var(--surface)',
-                  accentColor: 'var(--primary)', cursor: 'pointer'
-                }}
-              />
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                <span>1s (Velocidade Máxima)</span>
-                <span>5s (Padrão Recomendado)</span>
-                <span>15s (Máxima Segurança)</span>
-              </div>
-            </div>
-
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Contatos Selecionados</label>
-                <div style={{
-                    height: '40px', padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--surface)',
-                    border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 700,
-                    display: 'flex', alignItems: 'center'
-                  }}>
-                  {selectedContactIds.length}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Tempo Estimado Total</span>
-                <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <FastForward size={18} />
-                  <span>{estimatedMinutes}m {estimatedRemainderSeconds}s</span>
-                </span>
-              </div>
-            </div>
-
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Smartphone size={16} /> <span>Celular do Administrador (Disparo de Teste)</span>
-                </label>
-                <input 
-                  type="text" 
-                  value={adminTestPhone} 
-                  onChange={e => setAdminTestPhone(e.target.value)}
-                  placeholder="+55 11 99999-8888"
-                  style={{
-                    height: '42px', padding: '0 16px', borderRadius: '8px', backgroundColor: 'var(--surface)',
-                    border: '1px solid var(--border)', color: 'var(--text-main)', fontSize: '0.9rem', outline: 'none'
-                  }}
-                />
-              </div>
-
-              <Button type="button" variant="secondary" onClick={handleFireTestMessage} isLoading={isTestFiring} style={{ height: '42px', alignSelf: 'flex-end', padding: '0 20px', borderColor: 'var(--primary)', color: 'var(--primary)' }}>
-                Disparar Teste Prévio
-              </Button>
-            </div>
-
-            <Button type="button" variant="primary" icon={Send} onClick={handleLaunchMassBatch} isLoading={isLaunchingBatch} style={{ height: '48px', fontSize: '1rem', backgroundColor: 'var(--success)', borderColor: 'var(--success)' }}>
-              {isLaunchingBatch ? 'Enfileirando Pacotes...' : 'Entrar na Fila Agora (Iniciar Disparo)'}
-            </Button>
-          </div>
-
-        </div>
-
-        {/* Right Card: Real-Time Broadcast Metrics Stats */}
-        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Server size={24} style={{ color: 'var(--success)' }} />
-              <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>Métricas do Cluster de Fila</h3>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Status de entrega e telemetria Redis em tempo real</span>
-              </div>
-            </div>
-            <Badge variant="success">Online</Badge>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><Layers size={16} style={{ color: 'var(--primary)' }} /> Em Espera</span>
-              <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--primary)' }}>{queuedCount}</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Aguardando worker Redis</span>
-            </div>
-
-            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><Activity size={16} style={{ color: 'var(--warning)' }} /> Processando</span>
-              <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--warning)' }}>{processingCount}</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Consumindo API WhatsApp</span>
-            </div>
-
-            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={16} style={{ color: 'var(--success)' }} /> Disparados</span>
-              <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--success)' }}>{completedCount}</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Entrega confirmada</span>
-            </div>
-
-            <div style={{ padding: '20px', borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><ShieldAlert size={16} style={{ color: 'var(--error)' }} /> Falhas/Cancelados</span>
-              <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--error)' }}>{failedCount + cancelledCount}</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Retentativas / Abortos</span>
-            </div>
-          </div>
-
-          <div style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', border: '1px solid color-mix(in srgb, var(--border) 40%, transparent)', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            <span style={{ fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}><Activity size={16} style={{ color: 'var(--primary)' }} /> Cluster BullMQ Config:</span>
-            <span style={{ fontFamily: 'monospace', color: 'var(--success)' }}>[INFO] Worker conectado. Concorrência: 1 job por vez.</span>
-            <span style={{ fontFamily: 'monospace', color: 'var(--info)' }}>[CONFIG] Cadência: {delaySeconds}s de delay entre pacotes.</span>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Sprint 40: Visualizador de Detalhes de Erros e Controle de Retentativa Individual */}
-      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--error)', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, width: '6px', height: '100%', backgroundColor: 'var(--error)' }} />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--error) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)' }}>
-              <ShieldAlert size={24} />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span>Falhas no Envio Atual (Diagnostic & Retry Hub)</span>
-                <Badge variant="error">{failedJobsList.length} falhas detectadas</Badge>
-              </h3>
-              <span style={{ fontSize: '0.85rem', color: 'var(--error)' }}>Inspeção diagnóstica de conectividade e gatilhos de retentativa individual</span>
-            </div>
-          </div>
-
-          {failedJobsList.length > 0 && (
-            <Button 
-              type="button" 
-              variant="secondary" 
-              icon={RotateCcw} 
-              onClick={handleRetryAllFailedJobs} 
-              isLoading={isRetryingAll}
-              style={{ borderColor: 'var(--error)', color: 'var(--error)' }}
-            >
-              Re-enviar Todas as Falhas
-            </Button>
-          )}
-        </div>
-
-        {/* Failed Jobs Diagnostic Grid */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {failedJobsList.length === 0 ? (
-            <div style={{ padding: '42px 20px', textAlign: 'center', backgroundColor: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-              <CheckCircle2 size={36} style={{ color: 'var(--success)', margin: '0 auto 12px auto' }} />
-              <p style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)' }}>Nenhuma falha detectada no lote de transmissão atual!</p>
-              <span style={{ fontSize: '0.85rem' }}>Todos os destinatários processados até o momento foram confirmados com sucesso.</span>
-            </div>
-          ) : (
-            failedJobsList.map(job => (
-              <div 
-                key={job.id} 
-                style={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', 
-                  borderRadius: '12px', backgroundColor: 'var(--surface)', border: '1px solid color-mix(in srgb, var(--error) 30%, transparent)',
-                  flexWrap: 'wrap', gap: '16px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flex: 1, minWidth: '300px' }}>
-                  <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'color-mix(in srgb, var(--error) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', marginTop: '2px' }}>
-                    <AlertCircle size={20} />
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                      <strong style={{ fontSize: '1.05rem', color: 'var(--text-main)' }}>{job.recipientName}</strong>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{job.recipientPhone}</span>
-                      <Badge variant="error">{job.error || 'ERR_NETWORK_FAILURE'}</Badge>
-                    </div>
-
-                    <p style={{ fontSize: '0.85rem', color: 'var(--error)', lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <HelpCircle size={15} style={{ flexShrink: 0 }} />
-                      <span>{job.errorDescription}</span>
-                    </p>
-
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Tentativas executadas: {job.attempts} • Último erro registrado às {job.timestamp}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Button 
-                    type="button" 
-                    variant="secondary" 
-                    icon={Zap} 
-                    onClick={() => handleRetryIndividualJob(job.id)}
-                    isLoading={retryingJobId === job.id}
-                    style={{ height: '40px', fontSize: '0.85rem', borderColor: 'var(--primary)', color: 'var(--primary)' }}
-                  >
-                    {retryingJobId === job.id ? 'Restaurando...' : 'Re-enviar (Retry)'}
-                  </Button>
-                </div>
-
-              </div>
-            ))
-          )}
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          <span>💡 <strong>Dica de Ajuda:</strong> O re-envio individual injeta o pacote no topo da fila do BullMQ, garantindo prioridade de tráfego sobre os envios normais.</span>
-        </div>
-      </div>
-
-      {/* Feed Terminal-Like de Logs de Disparo (SSE Log Viewer) */}
-      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px', borderColor: 'var(--primary)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--info) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-              <Terminal size={24} />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text-main)' }}>Feed Terminal-Like de Logs de Disparo (SSE Log Viewer)</h3>
-              <span style={{ fontSize: '0.85rem', color: 'var(--info)' }}>Console de monitoramento de eventos de servidor emitidos pelo BullMQ / Redis</span>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer', userSelect: 'none' }}>
-              <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} style={{ accentColor: 'var(--primary)', width: '18px', height: '18px', cursor: 'pointer' }} />
-              <span>🔒 Auto-scroll para novos eventos</span>
-            </label>
-
-            <Button type="button" variant="secondary" icon={Trash2} onClick={handleClearLogsConsole} style={{ height: '36px', fontSize: '0.8rem' }}>
-              Limpar Console
+            <Button type="button" variant="secondary" onClick={() => void loadPreview()} isLoading={previewLoading} style={{ height: 36, fontSize: '0.8rem' }}>
+              Recalcular prévia
             </Button>
           </div>
         </div>
 
-        <div style={{
-          backgroundColor: 'var(--background)', borderRadius: '12px', border: '1px solid var(--border)', padding: '24px',
-          fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text-main)', height: '320px',
-          overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.8)'
-        }}>
-          {logs.length === 0 ? (
-            <div style={{ margin: 'auto', color: 'var(--text-muted)', fontStyle: 'italic' }}>[Console limpo. Aguardando novos eventos SSE da fila...]</div>
-          ) : (
-            logs.map(log => {
-              const getLogColor = (t: string) => {
-                switch (t) {
-                  case 'INFO': return 'var(--info)';
-                  case 'SUCCESS': return 'var(--success)';
-                  case 'WARNING': return 'var(--warning)';
-                  case 'ERROR': return 'var(--error)';
-                  default: return 'var(--text-muted)';
-                }
-              };
+        {preview ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+            <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total na base</span>
+              <strong style={{ display: 'block', fontSize: '1.3rem' }}>{preview.totalContacts}</strong>
+            </div>
+            <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Elegíveis</span>
+              <strong style={{ display: 'block', fontSize: '1.3rem', color: 'var(--success)' }}>{preview.eligibleContacts}</strong>
+            </div>
+            <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lotes (batch {preview.batchSize})</span>
+              <strong style={{ display: 'block', fontSize: '1.3rem' }}>{preview.estimatedBatches}</strong>
+            </div>
+            <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Já enviados (skip)</span>
+              <strong style={{ display: 'block', fontSize: '1.3rem' }}>{preview.alreadySentContacts}</strong>
+            </div>
+          </div>
+        ) : (
+          <p style={{ color: 'var(--text-muted)' }}>Carregando prévia…</p>
+        )}
 
-              return (
-                <div key={log.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', borderBottom: '1px solid color-mix(in srgb, var(--border) 15%, transparent)', paddingBottom: '4px' }}>
-                  <span style={{ color: 'var(--text-muted)', userSelect: 'none', fontSize: '0.85rem' }}>[{log.timestamp}]</span>
-                  <span style={{ 
-                    color: getLogColor(log.type), fontWeight: 700, fontSize: '0.8rem', padding: '1px 6px', 
-                    borderRadius: '4px', backgroundColor: log.type === 'ERROR' ? 'color-mix(in srgb, var(--error) 10%, transparent)' : log.type === 'SUCCESS' ? 'color-mix(in srgb, var(--success) 10%, transparent)' : log.type === 'WARNING' ? 'color-mix(in srgb, var(--warning) 10%, transparent)' : 'color-mix(in srgb, var(--info) 10%, transparent)',
-                    border: `1px solid ${getLogColor(log.type)}`, minWidth: '75px', textAlign: 'center'
-                  }}>
-                    {log.type}
-                  </span>
-                  <span style={{ color: log.type === 'ERROR' ? 'var(--error)' : log.type === 'WARNING' ? 'var(--warning)' : log.type === 'SUCCESS' ? 'var(--success)' : 'var(--text-main)', wordBreak: 'break-word', flex: 1 }}>
-                    {log.message}
-                  </span>
-                </div>
-              );
-            })
-          )}
-          <div ref={terminalBottomRef} />
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          <span>💡 <strong>Dica:</strong> Buffer limitado às últimas 500 entradas para otimização de RAM.</span>
-          <span>Linhas no buffer atual: <strong>{logs.length}</strong> / 500</span>
-        </div>
-      </div>
-
-      {/* Active Queue Details List */}
-      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+        {exclusionSummary && exclusionSummary.excluded > 0 && (
           <div>
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ListFilter size={22} style={{ color: 'var(--primary)' }} />
-              <span>Jobs na Fila de Disparo Ativa</span>
-            </h3>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Lista de contatos aguardando processamento ou concluídos nesta sessão</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '6px', backgroundColor: 'var(--surface)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-              {['ALL', 'QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED'].map(st => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setFilterStatus(st)}
-                  style={{
-                    padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
-                    border: 'none', transition: 'all 0.2s',
-                    backgroundColor: filterStatus === st ? 'var(--primary)' : 'transparent',
-                    color: filterStatus === st ? 'white' : 'var(--text-muted)'
-                  }}
-                >
-                  {st}
-                </button>
-              ))}
-            </div>
-
-            {(failedCount > 0 || cancelledCount > 0) && (
-              <Button variant="secondary" onClick={handlePurgeFailedJobs} style={{ height: '36px', fontSize: '0.8rem', borderColor: 'var(--error)', color: 'var(--error)' }}>
-                Limpar Falhas/Cancelados
-              </Button>
+            <button type="button" onClick={() => setShowExclusionDetails((v) => !v)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>
+              {showExclusionDetails ? 'Ocultar' : 'Ver'} detalhes da exclusão ({exclusionSummary.excluded})
+            </button>
+            {showExclusionDetails && preview && (
+              <ul style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                <li>Inativos: {preview.inactiveContacts}</li>
+                <li>Telefone inválido: {preview.invalidContacts}</li>
+                <li>Exclusões manuais: {preview.excludedContacts}</li>
+                <li>Já enviados (skipAlreadySent): {preview.alreadySentContacts}</li>
+              </ul>
             )}
           </div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {filteredJobs.length === 0 ? (
-            <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              Nenhum job encontrado para o status selecionado.
-            </div>
-          ) : (
-            filteredJobs.map(job => (
-              <div 
-                key={job.id} 
-                style={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', 
-                  borderRadius: '12px', backgroundColor: job.status === 'PROCESSING' ? 'color-mix(in srgb, var(--warning) 10%, transparent)' : 
-                                                         job.status === 'CANCELLED' ? 'color-mix(in srgb, var(--text-muted) 10%, transparent)' : 'var(--surface)', 
-                  border: `1px solid ${job.status === 'PROCESSING' ? 'var(--warning)' : 
-                                       job.status === 'CANCELLED' ? 'var(--text-muted)' : 'var(--border)'}`,
-                  flexWrap: 'wrap', gap: '16px', opacity: job.status === 'CANCELLED' ? 0.6 : 1
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{ 
-                    width: '42px', height: '42px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: job.status === 'COMPLETED' ? 'color-mix(in srgb, var(--success) 10%, transparent)' : 
-                                     job.status === 'PROCESSING' ? 'color-mix(in srgb, var(--warning) 20%, transparent)' : 
-                                     job.status === 'FAILED' ? 'color-mix(in srgb, var(--error) 10%, transparent)' : 
-                                     job.status === 'CANCELLED' ? 'color-mix(in srgb, var(--text-muted) 20%, transparent)' : 'color-mix(in srgb, var(--border) 30%, transparent)',
-                    color: job.status === 'COMPLETED' ? 'var(--success)' : 
-                           job.status === 'PROCESSING' ? 'var(--warning)' : 
-                           job.status === 'FAILED' ? 'var(--error)' : 
-                           job.status === 'CANCELLED' ? 'var(--text-muted)' : 'var(--text-muted)'
-                  }}>
-                    {job.status === 'COMPLETED' ? <CheckCircle2 size={20} /> :
-                     job.status === 'PROCESSING' ? <Activity size={20} className="spinner" /> :
-                     job.status === 'FAILED' ? <AlertCircle size={20} /> : 
-                     job.status === 'CANCELLED' ? <Ban size={20} /> : <Clock size={20} />}
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <strong style={{ fontSize: '1rem', color: 'var(--text-main)', textDecoration: job.status === 'CANCELLED' ? 'line-through' : 'none' }}>
-                        {job.recipientName}
-                      </strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{job.recipientPhone}</span>
-                    </div>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {job.messageSnippet}
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  {job.error && (
-                    <span style={{ fontSize: '0.75rem', color: job.status === 'CANCELLED' ? 'var(--text-muted)' : 'var(--error)', backgroundColor: job.status === 'CANCELLED' ? 'color-mix(in srgb, var(--border) 30%, transparent)' : 'color-mix(in srgb, var(--error) 10%, transparent)', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${job.status === 'CANCELLED' ? 'var(--text-muted)' : 'var(--error)'}` }}>
-                      {job.error}
-                    </span>
-                  )}
-
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                    <Badge variant={job.status === 'COMPLETED' ? 'success' : job.status === 'PROCESSING' ? 'warning' : job.status === 'FAILED' ? 'error' : 'neutral'}>
-                      {job.status}
-                    </Badge>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      Tentativas: {job.attempts} • {job.timestamp}
-                    </span>
-                  </div>
-                </div>
-
-              </div>
-            ))
-          )}
-        </div>
-
+        )}
       </div>
 
-      {/* Painel de Histórico de Lotes Transmitidos */}
-      <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--primary)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--primary) 15%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-              <History size={24} />
-            </div>
+      <div className="responsive-grid">
+        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '24px', borderColor: 'var(--primary)', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', backgroundColor: 'var(--primary)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Sliders size={24} style={{ color: 'var(--primary)' }} />
             <div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)' }}>Histórico de lotes</h3>
-              <span style={{ fontSize: '0.85rem', color: 'var(--primary)' }}>Auditoria de entregas, volumes disparados e relatórios CSV consolidados</span>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Controle de lançamento</h3>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Intervalo antispam · volume = elegíveis do servidor</span>
             </div>
           </div>
 
-          <Badge variant="primary">Mês Atual: Maio/2026</Badge>
+          <div style={{ backgroundColor: 'var(--surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <label style={{ fontWeight: 600 }}>Delay entre mensagens</label>
+              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{delaySeconds}s</span>
+            </div>
+            <input type="range" min="1" max="15" step="0.5" value={delaySeconds} onChange={(e) => setDelaySeconds(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary)' }} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Quantidade total da campanha</span>
+                <strong style={{ display: 'block', fontSize: '1.2rem' }}>{eligible}</strong>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Tempo estimado</span>
+                <strong style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <FastForward size={18} /> {estimatedMinutes}m {estimatedRemainderSeconds}s
+                </strong>
+              </div>
+            </div>
+            {preview && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+                Tamanho dos lotes de enfileiramento: {preview.batchSize} · Lotes: {preview.estimatedBatches} · Intervalo: {delaySeconds}s
+              </p>
+            )}
+          </div>
+
+          <Button type="button" variant="primary" icon={Send} onClick={() => void handleLaunchMassBatch()} isLoading={isLaunchingBatch} style={{ height: 48, backgroundColor: 'var(--success)', borderColor: 'var(--success)' }}>
+            {isLaunchingBatch ? 'Enfileirando…' : 'Criar campanha e entrar na fila'}
+          </Button>
         </div>
 
-        <div className="table-scroll" style={{ borderRadius: '12px', border: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem', minWidth: 640 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'color-mix(in srgb, var(--border) 20%, transparent)', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '16px 24px', fontWeight: 600 }}>Data de Envio</th>
-                <th style={{ padding: '16px 24px', fontWeight: 600 }}>Notícia / Minuta Disparada</th>
-                <th style={{ padding: '16px 24px', fontWeight: 600 }}>Base Alcançada</th>
-                <th style={{ padding: '16px 24px', fontWeight: 600 }}>Taxa de Sucesso</th>
-                <th style={{ padding: '16px 24px', fontWeight: 600 }}>Duração Total</th>
-                <th style={{ padding: '16px 24px', textAlign: 'right', fontWeight: 600 }}>Ações de Auditoria</th>
-              </tr>
-            </thead>
-            <tbody style={{ borderTop: '1px solid var(--border)' }}>
-              {historicalBatches.map(batch => (
-                <tr key={batch.id} style={{ borderBottom: '1px solid color-mix(in srgb, var(--border) 30%, transparent)' }}>
-                  <td style={{ padding: '18px 24px', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Clock size={16} style={{ color: 'var(--primary)' }} />
-                    <span>{batch.date}</span>
-                  </td>
-
-                  <td style={{ padding: '18px 24px', color: 'var(--text-main)', fontWeight: 700 }}>
-                    {batch.title}
-                  </td>
-
-                  <td style={{ padding: '18px 24px', color: 'var(--text-muted)' }}>
-                    <strong style={{ color: 'var(--text-main)' }}>{batch.deliveredCount}</strong> / {batch.totalContacts} contatos
-                  </td>
-
-                  <td style={{ padding: '18px 24px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Badge variant={batch.successRate === '100%' ? 'success' : 'primary'}>
-                        {batch.successRate}
-                      </Badge>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>entregue</span>
-                    </div>
-                  </td>
-
-                  <td style={{ padding: '18px 24px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                    {batch.duration}
-                  </td>
-
-                  <td style={{ padding: '18px 24px', textAlign: 'right' }}>
-                    <Button 
-                      variant="secondary" 
-                      icon={Download} 
-                      onClick={() => handleDownloadBatchCsv(batch)}
-                      isLoading={isExportingCsvId === batch.id}
-                      style={{ height: '36px', fontSize: '0.8rem', borderColor: 'var(--primary)', color: 'var(--primary)', padding: '0 14px' }}
-                    >
-                      {isExportingCsvId === batch.id ? 'Gerando CSV...' : 'Baixar Relatório CSV'}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <FileSpreadsheet size={16} style={{ color: 'var(--primary)' }} />
-            <span>Os relatórios CSV seguem o padrão RFC 4180 e contêm os IDs de rastreamento do Meta Graph API (WAMID) para auditoria antispam.</span>
-          </span>
-          <span>Exibindo os 4 lotes mais recentes</span>
+        <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Server size={24} style={{ color: 'var(--success)' }} />
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Métricas da fila</h3>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Contadores do backend</span>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ padding: 20, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Em espera</span>
+              <strong style={{ display: 'block', fontSize: '2rem', color: 'var(--primary)' }}>{queuedCount}</strong>
+            </div>
+            <div style={{ padding: 20, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Processando</span>
+              <strong style={{ display: 'block', fontSize: '2rem', color: 'var(--warning)' }}>{processingCount}</strong>
+            </div>
+            <div style={{ padding: 20, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Disparados</span>
+              <strong style={{ display: 'block', fontSize: '2rem', color: 'var(--success)' }}>{completedCount}</strong>
+            </div>
+            <div style={{ padding: 20, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Falhas</span>
+              <strong style={{ display: 'block', fontSize: '2rem', color: 'var(--error)' }}>{failedCount}</strong>
+            </div>
+          </div>
         </div>
       </div>
 
+      <div className="glass-panel" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><AlertCircle size={18} /> Eventos SSE</h3>
+          <Button type="button" variant="secondary" onClick={() => setLogs([])} style={{ height: 32, fontSize: '0.75rem' }}>Limpar</Button>
+        </div>
+        <div style={{ maxHeight: 180, overflow: 'auto', fontFamily: 'monospace', fontSize: '0.8rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
+          {logs.length === 0 ? <span style={{ color: 'var(--text-muted)' }}>Aguardando eventos…</span> : logs.map((l) => (
+            <div key={l.id} style={{ color: l.type === 'ERROR' ? 'var(--error)' : l.type === 'SUCCESS' ? 'var(--success)' : 'var(--text-muted)' }}>
+              [{l.timestamp}] {l.message}
+            </div>
+          ))}
+          <div ref={terminalBottomRef} />
+        </div>
+      </div>
+
+      <div className="glass-panel" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <h3 style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShieldAlert size={18} /> Jobs da campanha ativa
+          </h3>
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ height: 36, borderRadius: 8, background: 'var(--surface)', color: 'var(--text-main)', border: '1px solid var(--border)' }}>
+            {['ALL', 'QUEUED', 'ACTIVE', 'SENT', 'FAILED', 'SKIPPED', 'CANCELLED'].map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+        {filteredJobs.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)' }}>Nenhum job listado. Sem campanha ativa ou fila vazia.</p>
+        ) : (
+          filteredJobs.map((job) => (
+            <div key={job.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+              <div>
+                <strong>{job.recipientName}</strong>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{job.recipientPhone}</div>
+                {job.error ? <div style={{ fontSize: '0.75rem', color: 'var(--error)' }}>{job.error}</div> : null}
+              </div>
+              <Badge variant={job.status === 'FAILED' ? 'error' : job.status === 'SENT' ? 'success' : 'primary'}>{job.status}</Badge>
+            </div>
+          ))
+        )}
+        {failedJobsList.length > 0 && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            {failedJobsList.length} falha(s). Retry individual será re-enfileirado sem duplicar jobIds já SENT (skipAlreadySent).
+          </p>
+        )}
+      </div>
+
+      <div className="glass-panel" style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><History size={20} /> Histórico de campanhas</h3>
+          <Badge variant="primary">Mês atual: {monthLabel}</Badge>
+        </div>
+        {historicalBatches.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)' }}>Nenhuma campanha registrada ainda (inclui PREPARING/QUEUED/COMPLETED).</p>
+        ) : (
+          historicalBatches.map((batch) => (
+            <div key={batch.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: 16, borderRadius: 10, border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+              <div>
+                <strong>{batch.title}</strong>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{new Date(batch.date).toLocaleString('pt-BR')} · {batch.status}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div>{batch.totalContacts} destinatários · {batch.successRate}</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{batch.deliveredCount} enviados · {batch.duration}</div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };

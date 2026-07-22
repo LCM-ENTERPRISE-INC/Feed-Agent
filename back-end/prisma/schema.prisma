@@ -27,6 +27,7 @@ model User {
   contacts          Contact[]
   drafts            Draft[]
   whatsAppInstances WhatsAppInstance[]
+  campaigns         Campaign[]
 
   @@map("users")
 }
@@ -83,4 +84,86 @@ model WhatsAppInstance {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("whatsapp_instances")
+}
+
+enum CampaignStatus {
+  DRAFT
+  PREPARING
+  QUEUE_FAILED
+  QUEUED
+  RUNNING
+  PAUSED
+  COMPLETED
+  PARTIAL_FAILED
+  FAILED
+  CANCELLED
+}
+
+enum CampaignRecipientStatus {
+  PENDING
+  QUEUED
+  ACTIVE
+  SENT
+  DELIVERED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+/// Persistent broadcast campaign / batch run for a user.
+model Campaign {
+  id                      String         @id @default(cuid())
+  userId                  Int            @map("user_id")
+  draftId                 Int?           @map("draft_id")
+  title                   String
+  status                  CampaignStatus @default(DRAFT)
+  selectionMode           String         @map("selection_mode") // all | specific
+  filtersJson             Json?          @map("filters_json")
+  excludedIdsJson         Json?          @map("excluded_ids_json")
+  contactIdsJson          Json?          @map("contact_ids_json")
+  expectedRecipients      Int            @default(0) @map("expected_recipients")
+  materializedRecipients  Int            @default(0) @map("materialized_recipients")
+  queuedJobs              Int            @default(0) @map("queued_jobs")
+  sentCount               Int            @default(0) @map("sent_count")
+  deliveredCount          Int            @default(0) @map("delivered_count")
+  failedCount             Int            @default(0) @map("failed_count")
+  pendingCount            Int            @default(0) @map("pending_count")
+  skippedCount            Int            @default(0) @map("skipped_count")
+  batchSize               Int            @default(125) @map("batch_size")
+  delayMs                 Int            @default(3500) @map("delay_ms")
+  skipAlreadySent         Boolean        @default(true) @map("skip_already_sent")
+  errorMessage            String?        @map("error_message")
+  startedAt               DateTime?      @map("started_at")
+  completedAt             DateTime?      @map("completed_at")
+  createdAt               DateTime       @default(now()) @map("created_at")
+  updatedAt               DateTime       @updatedAt @map("updated_at")
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipients  CampaignRecipient[]
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
+  @@map("campaigns")
+}
+
+/// One row per campaign recipient — jobId deterministic: campaignId:contactId
+model CampaignRecipient {
+  id           String                  @id // campaignId:contactId
+  campaignId   String                  @map("campaign_id")
+  contactId    Int                     @map("contact_id")
+  phoneNumber  String                  @map("phone_number")
+  contactName  String                  @map("contact_name")
+  status       CampaignRecipientStatus @default(PENDING)
+  attempts     Int                     @default(0)
+  errorMessage String?                 @map("error_message")
+  bullJobId    String?                 @map("bull_job_id")
+  sentAt       DateTime?               @map("sent_at")
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @updatedAt @map("updated_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, status])
+  @@index([campaignId, contactId])
+  @@map("campaign_recipients")
 }

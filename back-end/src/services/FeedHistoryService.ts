@@ -135,6 +135,21 @@ export class FeedHistoryService {
    * Top recipients by successful sends for one user.
    * Counts only status: sent | delivered | read. Isolated by userId.
    */
+  /**
+   * Phones already successfully sent for a draft (skipAlreadySent).
+   */
+  async getSentPhoneNumbersForDraft(userId: number, draftId: number): Promise<Set<string>> {
+    const rows = await FeedHistory.find({
+      userId,
+      draftId,
+      status: { $in: ['sent', 'delivered', 'read'] },
+    })
+      .select('contactNumber')
+      .lean()
+      .exec();
+    return new Set(rows.map((r) => String(r.contactNumber)));
+  }
+
   async getTopRecipients(userId: number, limit: number = 5): Promise<Array<{
     phoneNumber: string;
     sendCount: number;
