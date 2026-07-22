@@ -47,6 +47,12 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { showToast } from '@/utils/toastHelper';
 import apiClient from '@/services/apiClient';
+import {
+  buildContactsImportCsv,
+  CONTACTS_IMPORT_TEMPLATE,
+  mapCsvRowToImport,
+  type ImportContactRow,
+} from '@/utils/contactImport';
 
 interface Contact {
   id: string;
@@ -65,14 +71,7 @@ interface ApiContact {
   createdAt: string;
 }
 
-interface ParsedRow {
-  index: number;
-  name: string;
-  phone: string;
-  category: string;
-  valid: boolean;
-  errors: string[];
-}
+type ParsedRow = ImportContactRow;
 
 // Remove mock data generation
 const INITIAL_CONTACTS: Contact[] = [];
@@ -117,7 +116,6 @@ export const Contacts: React.FC = () => {
   const [importFileName, setImportFileName] = useState<string>('');
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [importProgress, setImportProgress] = useState<number>(0);
-  const [importFile, setImportFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Statistics / Analytics Dashboard State
@@ -282,8 +280,14 @@ export const Contacts: React.FC = () => {
       ? contacts.filter(c => selectedIds.includes(c.id)) 
       : filteredAndSortedContacts;
 
-    const headers = 'ID,Nome,Telefone,Status,Categoria,Data\n';
-    const rows = dataToExport.map(c => `"${c.id}","${c.name}","${c.phone}","${c.status}","${c.category}","${c.dateAdded}"`).join('\n');
+    // Cabeçalhos name/phoneNumber permitem reimportação na API
+    const headers = 'name,phoneNumber,status,category,dateAdded,id\n';
+    const rows = dataToExport
+      .map((c) => {
+        const phone = c.phone.replace(/\D/g, '');
+        return `${JSON.stringify(c.name)},${phone},${JSON.stringify(c.status)},${JSON.stringify(c.category)},${JSON.stringify(c.dateAdded)},${JSON.stringify(c.id)}`;
+      })
+      .join('\n');
     const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(headers + rows);
 
     const link = document.createElement('a');
@@ -295,74 +299,53 @@ export const Contacts: React.FC = () => {
     showToast.success(`Exportação CSV gerada com sucesso (${dataToExport.length} registros).`);
   };
 
-  // CSV Import Validation Template
+  // CSV Import — modelo alinhado à API (name, phoneNumber)
   const handleDownloadTemplate = () => {
-    const templateContent = 'Nome,Telefone,Categoria\n"João da Silva","+55 (11) 99999-0001","VIP"\n"Maria de Souza","5511988880002","Cliente"';
-    const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(templateContent);
+    const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(CONTACTS_IMPORT_TEMPLATE);
     const link = document.createElement('a');
     link.setAttribute('href', csvContent);
     link.setAttribute('download', 'modelo-importacao-contatos.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast.info('Arquivo modelo CSV baixado. Preencha e faça o upload.');
+    showToast.info('Modelo baixado (colunas: name, phoneNumber). Preencha e faça o upload.');
   };
 
   const handleProcessCsvFile = (file: File) => {
-    if (!file.name.endsWith('.csv')) {
+    if (!file.name.toLowerCase().endsWith('.csv')) {
       showToast.error('Por favor, selecione um arquivo no formato .csv.');
       return;
     }
 
-    setImportFile(file);
     setImportFileName(file.name);
     setParsedRows([]);
 
-    Papa.parse<{ Nome?: string; name?: string; Telefone?: string; phone?: string; Categoria?: string; category?: string }>(file, {
+    Papa.parse<Record<string, string>>(file, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const rows: ParsedRow[] = results.data.map((row, idx) => {
-          const rawName = row.Nome || row.name || '';
-          const rawPhone = row.Telefone || row.phone || '';
-          const rawCat = row.Categoria || row.category || 'Geral';
+        const headers = (results.meta.fields || []).map((h) => h.trim().toLowerCase());
+        const hasName = headers.some((h) => ['name', 'nome'].includes(h.replace(/[\s_]+/g, '')));
+        const hasPhone = headers.some((h) =>
+          ['phonenumber', 'phone', 'telefone', 'celular'].includes(h.replace(/[\s_]+/g, '')),
+        );
 
-          const errors: string[] = [];
-          if (!rawName.trim()) errors.push('Nome vazio');
-          
-          let digits = rawPhone.replace(/\D/g, '');
-          if (!digits.startsWith('55') && digits.length > 0) {
-            digits = '55' + digits;
-          }
+        if (!hasName || !hasPhone) {
+          showToast.error(
+            'CSV precisa de colunas name e phoneNumber (ou Nome/Telefone). Baixe o modelo oficial.',
+          );
+          setImportFileName('');
+          return;
+        }
 
-          let formattedPhone = rawPhone;
-          if (digits.length >= 12 && digits.length <= 13) {
-            formattedPhone = `+55 (${digits.substring(2, 4)}) 9${digits.substring(4, 8)}-${digits.substring(8, 12)}`;
-          } else {
-            errors.push(`Número de celular incompleto ou inválido (${digits.length} dígitos)`);
-          }
-
-          let validCat = 'Geral';
-          if (['VIP', 'Cliente', 'Imprensa', 'Geral'].includes(rawCat)) {
-            validCat = rawCat;
-          }
-
-          return {
-            index: idx + 1,
-            name: rawName,
-            phone: formattedPhone,
-            category: validCat,
-            valid: errors.length === 0,
-            errors,
-          };
-        });
-
+        const rows = results.data.map((row, idx) => mapCsvRowToImport(row, idx + 1));
         setParsedRows(rows);
-        showToast.success(`Arquivo analisado: ${rows.length} linhas preparadas.`);
+        const ok = rows.filter((r) => r.valid).length;
+        showToast.success(`Arquivo analisado: ${ok} válidas de ${rows.length} linhas.`);
       },
       error: () => {
-        showToast.error('Falha ao interpretar o arquivo CSV. Verifique a codificação.');
-      }
+        showToast.error('Falha ao interpretar o arquivo CSV. Verifique a codificação (UTF-8).');
+      },
     });
   };
 
@@ -377,8 +360,9 @@ export const Contacts: React.FC = () => {
   };
 
   const handleExecuteImport = async () => {
-    if (!importFile) {
-      showToast.error('Nenhum arquivo para importar.');
+    const validRows = parsedRows.filter((r) => r.valid);
+    if (validRows.length === 0) {
+      showToast.error('Nenhuma linha válida para importar.');
       return;
     }
 
@@ -386,30 +370,50 @@ export const Contacts: React.FC = () => {
     setImportProgress(20);
 
     try {
+      // Envia apenas linhas válidas, no formato exato da API
+      const csv = buildContactsImportCsv(validRows.map((r) => ({ name: r.name, phone: r.phone })));
+      const file = new File([csv], importFileName || 'contatos-import.csv', { type: 'text/csv' });
       const formData = new FormData();
-      formData.append('file', importFile);
-      
+      formData.append('file', file);
+
       const res = await apiClient.post('/contacts/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
           setImportProgress(Math.min(90, percentCompleted));
-        }
+        },
       });
-      
+
       setImportProgress(100);
       setIsImporting(false);
       setShowImportPanel(false);
       setParsedRows([]);
-      setImportFile(null);
-      
-      const summary = res.data?.data;
-      showToast.success(`${summary?.imported || 0} contatos foram importados com sucesso!`);
-      
+      setImportFileName('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
+      const summary = res.data?.data as {
+        imported?: number;
+        skipped?: number;
+        errors?: Array<{ row: number; reason: string }>;
+      } | undefined;
+      const imported = summary?.imported ?? 0;
+      const skipped = summary?.skipped ?? 0;
+      const errCount = summary?.errors?.length ?? 0;
+
+      if (imported > 0) {
+        showToast.success(
+          `${imported} importado(s)${skipped ? `, ${skipped} duplicado(s) ignorado(s)` : ''}${errCount ? `, ${errCount} com erro` : ''}.`,
+        );
+      } else if (skipped > 0) {
+        showToast.info(`Nenhum novo contato. ${skipped} já existiam (duplicados).`);
+      } else {
+        showToast.error(`Importação sem sucesso${errCount ? ` (${errCount} erro(s))` : ''}.`);
+      }
+
       fetchContacts();
     } catch (error) {
       console.error(error);
-      showToast.error('Falha na importação do arquivo.');
+      showToast.error('Falha na importação do arquivo. Confira o formato name,phoneNumber.');
       setIsImporting(false);
     }
   };
@@ -750,7 +754,8 @@ export const Contacts: React.FC = () => {
                 <span>Importar CSV</span>
               </h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
-                Arraste seu arquivo .csv estruturado ou baixe a planilha modelo para padronizar o cadastro em lote.
+                Use o modelo com colunas <code>name</code> e <code>phoneNumber</code> (telefone com DDI, ex.: 5511999990001).
+                Aliases Nome/Telefone também são aceitos no preview.
               </p>
             </div>
 
