@@ -479,7 +479,12 @@ export class WhatsAppService extends EventEmitter {
         }
 
         if (text || mediaUrl) {
-          logger.info(`[whatsapp-${this.instanceId}]: Received message from ${fromNumber}`);
+          logger.info(`[whatsapp-${this.instanceId}]: Received message`, {
+            phone: fromNumber.length > 6 ? `${fromNumber.slice(0, 4)}***${fromNumber.slice(-2)}` : '***',
+            messageId: messageId ? `${messageId.slice(0, 8)}…` : undefined,
+            hasMedia: !!mediaUrl,
+            textLen: text?.length || 0,
+          });
           this.emit('wa:message', {
             instanceId: this.instanceId,
             messageId,

@@ -2,7 +2,8 @@ import { WhatsAppService } from './WhatsAppService';
 import prisma from '../models/prismaClient';
 import logger from '../utils/logger';
 import feedHistoryService from './FeedHistoryService';
-import ChatMessage from '../models/ChatMessage';
+import chatService from './ChatService';
+import { chatLogFields } from '../utils/logMask';
 
 export class WhatsAppInstanceManager {
   // Map of instanceId -> WhatsAppService
@@ -65,27 +66,28 @@ export class WhatsAppInstanceManager {
 
     service.on('message:status', async ({ messageId, status }) => {
       await feedHistoryService.updateStatusByMessageId(messageId, status);
-      logger.info(`[whatsapp-webhook]: Message ${messageId} status updated to ${status} by instance ${instanceId}`);
+      try {
+        await chatService.updateStatusByMessageId(messageId, status);
+      } catch (err: any) {
+        logger.warn('[whatsapp-manager]: chat status update failed', chatLogFields({ instanceId, messageId, status }));
+      }
+      logger.info(`[whatsapp-webhook]: Message status updated`, chatLogFields({ instanceId, messageId, status }));
     });
 
     service.on('wa:message', async (payload) => {
       try {
-        await ChatMessage.create({
-          instanceId: payload.instanceId,
-          fromNumber: payload.fromNumber,
-          text: payload.text,
-          fromMe: false, // Incoming message
-          timestamp: payload.timestamp,
-          messageId: payload.messageId,
-          mediaUrl: payload.mediaUrl,
-          mediaType: payload.mediaType
-        });
-        logger.info(`[whatsapp-manager]: Saved incoming message ${payload.messageId} to MongoDB.`);
+        await chatService.persistInbound(userId, payload);
       } catch (err: any) {
-        // Ignore duplicate key errors if message already exists
-        if (err.code !== 11000) {
-          logger.error(`[whatsapp-manager]: Failed to save incoming message to MongoDB: ${err.message}`);
-        }
+        logger.error(
+          `[whatsapp-manager]: Failed to save incoming message`,
+          chatLogFields({
+            userId,
+            instanceId: payload.instanceId,
+            phone: payload.fromNumber,
+            messageId: payload.messageId,
+            text: payload.text,
+          })
+        );
       }
     });
 

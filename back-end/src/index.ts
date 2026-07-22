@@ -56,8 +56,31 @@ app.use(helmet());
 // Global Rate Limiting
 app.use(globalLimiter);
 
-// CORS — only allow the Vue 3 dashboard origin
-app.use(cors());
+// CORS — allow dashboard origins only (no wildcard with credentials)
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Same-origin / server-to-server / curl (no Origin header)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  })
+);
 
 // Body parsers
 app.use(express.json({ limit: '50mb' }));

@@ -25,6 +25,17 @@ const router = Router();
 
 /**
  * @openapi
+ * /api/whatsapp/conversations:
+ *   get:
+ *     summary: Listar conversas do usuário (cursor)
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/conversations', authMiddleware, whatsAppController.listConversations.bind(whatsAppController));
+
+/**
+ * @openapi
  * /api/whatsapp/instances:
  *   get:
  *     summary: Obter todas as instâncias do WhatsApp

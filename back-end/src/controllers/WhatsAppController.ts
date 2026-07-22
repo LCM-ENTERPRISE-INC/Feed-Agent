@@ -1,16 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import whatsAppInstanceManager from '../services/WhatsAppInstanceManager';
+import chatService from '../services/ChatService';
 import prisma from '../models/prismaClient';
 import { ApiResponse } from '../utils/ApiResponse';
 import { AppError } from '../utils/AppError';
 import logger from '../utils/logger';
-import ChatMessage from '../models/ChatMessage';
 
 // SSE heartbeat interval (keep connection alive through proxies/load-balancers)
 const SSE_HEARTBEAT_MS = 25_000;
 
 /**
- * Handles HTTP endpoints for WhatsApp connection management.
+ * Handles HTTP endpoints for WhatsApp connection management and chat.
  */
 export class WhatsAppController {
   
@@ -28,7 +28,7 @@ export class WhatsAppController {
 
       const instances = dbInstances.map((inst: any) => {
         const liveInstance = whatsAppInstanceManager.getInstance(inst.id);
-        const liveStatus = liveInstance ? liveInstance.getStatus() : { state: 'DISCONNECTED' };
+        const liveStatus = liveInstance ? liveInstance.getStatus() : { state: 'close' };
         
         return {
           id: inst.id,
@@ -134,7 +134,7 @@ export class WhatsAppController {
     res.setHeader('X-Accel-Buffering',           'no'); // Disable Nginx buffering
     res.flushHeaders();
 
-    logger.info(`[whatsapp-sse]: Client connected for instance ${instanceId} from ${req.ip}`);
+    logger.info(`[whatsapp-sse]: Client connected for instance ${instanceId}`);
 
     // ── Helper to push typed SSE events ──────────────────────────────────
     const pushEvent = (event: string, data: object | null = null): void => {
@@ -214,12 +214,30 @@ export class WhatsAppController {
     // Confirm connection immediately
     pushEvent('connected', { instanceId, message: 'Listening for incoming messages...' });
 
-    // Handle incoming messages
+    // Handle incoming messages (persist already done in manager; enrich for UI)
     const onMessage = (payload: any) => {
-      pushEvent('message', payload);
+      pushEvent('message', {
+        messageId: payload.messageId,
+        fromNumber: payload.fromNumber,
+        text: payload.text,
+        timestamp: payload.timestamp,
+        mediaUrl: payload.mediaUrl,
+        mediaType: payload.mediaType,
+        fromMe: false,
+        status: 'DELIVERED',
+        instanceId: payload.instanceId ?? instanceId,
+      });
+    };
+
+    const onStatus = ({ messageId, status }: { messageId: string; status: string }) => {
+      pushEvent('message:status', {
+        messageId,
+        status: status === 'read' ? 'READ' : 'DELIVERED',
+      });
     };
 
     liveInstance.on('wa:message', onMessage);
+    liveInstance.on('message:status', onStatus);
 
     // Heartbeat
     const heartbeat = setInterval(() => {
@@ -231,7 +249,24 @@ export class WhatsAppController {
       logger.info(`[whatsapp-messages-sse]: Client disconnected for instance ${instanceId}`);
       clearInterval(heartbeat);
       liveInstance.off('wa:message', onMessage);
+      liveInstance.off('message:status', onStatus);
     });
+  }
+
+  /**
+   * GET /api/whatsapp/conversations
+   * Cursor-paginated conversation list derived from persisted messages.
+   */
+  async listConversations(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 30;
+      const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
+      const page = await chatService.listConversations(userId, { limit, cursor });
+      ApiResponse.success(res, page, 'Conversas recuperadas.');
+    } catch (err) {
+      next(err);
+    }
   }
 
   /**
@@ -241,33 +276,21 @@ export class WhatsAppController {
     try {
       const userId = req.user!.userId;
       const instanceId = parseInt(req.params.id as string, 10);
-      const { phoneNumber, message } = req.body;
+      const { phoneNumber, message, clientMessageId } = req.body;
 
       if (!phoneNumber || !message) {
         throw new AppError('phoneNumber and message are required in the body.', 400);
       }
 
-      const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
-      if (!liveInstance || liveInstance.getUserId() !== userId) {
-        throw new AppError('Instância não ativa ou não autorizada.', 404);
-      }
+      const dto = await chatService.sendText({
+        userId,
+        instanceId,
+        phoneNumber,
+        message,
+        clientMessageId: typeof clientMessageId === 'string' ? clientMessageId : undefined,
+      });
 
-      const messageId = await liveInstance.sendMessage(phoneNumber, message);
-      
-      try {
-        await ChatMessage.create({
-          instanceId,
-          fromNumber: phoneNumber,
-          text: message,
-          fromMe: true,
-          timestamp: Date.now(),
-          messageId: messageId || `sent-${Date.now()}`
-        });
-      } catch (err: any) {
-        logger.error(`[whatsapp-controller]: Erro ao salvar mensagem enviada no mongoDB: ${err.message}`);
-      }
-      
-      ApiResponse.success(res, null, 'Mensagem enviada.');
+      ApiResponse.success(res, dto, 'Mensagem enviada.');
     } catch (err) {
       next(err);
     }
@@ -287,10 +310,7 @@ export class WhatsAppController {
         throw new AppError('phoneNumber and file are required.', 400);
       }
 
-      const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
-      if (!liveInstance || liveInstance.getUserId() !== userId) {
-        throw new AppError('Instância não ativa ou não autorizada.', 404);
-      }
+      const liveInstance = await chatService.requireConnectedInstance(userId, instanceId);
 
       const mediaPath = file.path;
       const mimeType = file.mimetype;
@@ -298,22 +318,17 @@ export class WhatsAppController {
 
       const messageId = await liveInstance.sendMedia(phoneNumber, mediaPath, mimeType, caption || '', originalName);
       
-      try {
-        await ChatMessage.create({
-          instanceId,
-          fromNumber: phoneNumber,
-          text: caption || '',
-          fromMe: true,
-          timestamp: Date.now(),
-          messageId: messageId || `sent-${Date.now()}`,
-          mediaUrl: `/uploads/${file.filename}`,
-          mediaType: mimeType
-        });
-      } catch (err: any) {
-        logger.error(`[whatsapp-controller]: Erro ao salvar mensagem de mídia no mongoDB: ${err.message}`);
-      }
+      const dto = await chatService.persistOutboundMedia({
+        userId,
+        instanceId,
+        phoneNumber,
+        caption,
+        messageId: messageId || `sent-media-${Date.now()}`,
+        mediaUrl: `/uploads/${file.filename}`,
+        mediaType: mimeType,
+      });
       
-      ApiResponse.success(res, null, 'Mídia enviada.');
+      ApiResponse.success(res, dto, 'Mídia enviada.');
     } catch (err) {
       next(err);
     }
@@ -379,30 +394,31 @@ export class WhatsAppController {
       next(err);
     }
   }
+
   /**
    * GET /api/whatsapp/instances/:id/messages
+   * Cursor-paginated history (ownership via DB — works after reload even if reconnecting).
    */
   async getChatHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
       const instanceId = parseInt(req.params.id as string, 10);
       const contact = req.query.contact as string;
+      const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
+      const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 40;
 
       if (!contact) {
         throw new AppError('O parâmetro de query "contact" é obrigatório.', 400);
       }
 
-      const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
-      if (!liveInstance || liveInstance.getUserId() !== userId) {
-        throw new AppError('Instância não ativa ou não autorizada.', 404);
+      const page = await chatService.listMessages(userId, instanceId, contact, { limit, cursor });
+
+      // Mark as read when opening the thread (first page only)
+      if (!cursor) {
+        await chatService.markConversationRead(userId, instanceId, contact).catch(() => {});
       }
 
-      const messages = await ChatMessage.find({
-        instanceId,
-        fromNumber: contact
-      }).sort({ timestamp: 1 }).limit(100);
-
-      ApiResponse.success(res, messages, 'Histórico de mensagens recuperado.');
+      ApiResponse.success(res, page, 'Histórico de mensagens recuperado.');
     } catch (err) {
       next(err);
     }

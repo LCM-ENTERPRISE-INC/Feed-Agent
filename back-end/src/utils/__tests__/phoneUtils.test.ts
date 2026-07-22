@@ -1,4 +1,4 @@
-import { sanitizePhoneNumber, isValidPhoneNumber, toWhatsAppJid } from '../phoneUtils';
+import { sanitizePhoneNumber, isValidPhoneNumber, toWhatsAppJid, phoneLookupVariants, maskPhone } from '../phoneUtils';
 
 describe('PhoneUtils', () => {
   describe('sanitizePhoneNumber', () => {
@@ -35,6 +35,21 @@ describe('PhoneUtils', () => {
   describe('toWhatsAppJid', () => {
     it('should append the s.whatsapp.net suffix', () => {
       expect(toWhatsAppJid('5511999990001')).toBe('5511999990001@s.whatsapp.net');
+    });
+  });
+
+  describe('phoneLookupVariants', () => {
+    it('returns with/without Brazilian 9th digit', () => {
+      const withNine = phoneLookupVariants('5511999990001');
+      expect(withNine).toEqual(expect.arrayContaining(['5511999990001', '551199990001']));
+      const withoutNine = phoneLookupVariants('551199990001');
+      expect(withoutNine).toEqual(expect.arrayContaining(['551199990001', '5511999990001']));
+    });
+  });
+
+  describe('maskPhone', () => {
+    it('masks middle digits', () => {
+      expect(maskPhone('5511999990001')).toBe('5511***01');
     });
   });
 });

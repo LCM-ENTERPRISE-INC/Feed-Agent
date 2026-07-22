@@ -31,7 +31,8 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, theme, onThemeToggl
           if (res.data?.success) {
             const instances = res.data.data;
             const openCount = instances.filter(
-              (inst: { liveStatus?: { state?: string } }) => inst.liveStatus?.state === 'OPEN',
+              (inst: { liveStatus?: { state?: string } }) =>
+                String(inst.liveStatus?.state || '').toLowerCase() === 'open',
             ).length;
             setConnectedCount(openCount);
           }
