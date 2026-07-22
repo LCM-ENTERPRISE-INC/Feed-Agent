@@ -10,10 +10,10 @@ else
   compose_cmd="docker-compose"
 fi
 
-domains=(autohist.com.br)
+domains=(businesszap.com.br)
 rsa_key_size=4096
 data_path="./data/certbot"
-email="contato@autohist.com.br" # Generic email since user didn't provide one
+email="contato@businesszap.com.br" # Atualizar se necessário antes do emit do certificado
 staging=0 # Set to 1 if you're testing your setup to avoid hitting request limits
 
 if [ -d "$data_path" ]; then
