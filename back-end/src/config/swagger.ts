@@ -2,6 +2,8 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import { Express } from 'express';
 
+import path from 'path';
+
 const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
@@ -26,7 +28,7 @@ const options: swaggerJsdoc.Options = {
       },
     },
   },
-  apis: ['./src/routes/*.ts'], // Path to the API docs
+  apis: [path.join(__dirname, '../routes/*.{ts,js}')], // Resuelve absoluto tanto em src/ quanto em dist/
 };
 
 const swaggerSpec = swaggerJsdoc(options);

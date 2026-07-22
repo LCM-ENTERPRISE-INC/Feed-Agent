@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
+  MessageSquare,
 } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
 import { BrandCopyright } from '@/components/BrandCopyright';
@@ -31,6 +32,7 @@ const sections: NavSection[] = [
     items: [
       { path: '/dashboard', name: NAV_LABELS.dashboard, icon: Home },
       { path: '/whatsapp', name: NAV_LABELS.whatsapp, icon: Phone },
+      { path: '/chat', name: NAV_LABELS.chat, icon: MessageSquare },
       { path: '/contacts', name: NAV_LABELS.contacts, icon: Users },
     ],
   },

@@ -8,7 +8,7 @@ const bullmq_1 = require("bullmq");
 const logger_1 = __importDefault(require("../utils/logger"));
 const redisClient_1 = __importDefault(require("../utils/redisClient"));
 const DraftService_1 = __importDefault(require("../services/DraftService"));
-const WhatsAppService_1 = __importDefault(require("../services/WhatsAppService"));
+const WhatsAppInstanceManager_1 = __importDefault(require("../services/WhatsAppInstanceManager"));
 const FeedHistoryService_1 = __importDefault(require("../services/FeedHistoryService"));
 const ContactService_1 = __importDefault(require("../services/ContactService"));
 exports.BROADCAST_QUEUE_NAME = 'broadcast-processing-queue';
@@ -35,8 +35,18 @@ const broadcastProcessor = async (job) => {
         }
         // 2. Format Message (Assuming the Draft has titulo, resumo, fonte in generatedContent)
         const content = draft.generatedContent;
-        const messageText = `*${content.titulo || 'Notícia'}*\n\n${content.resumo || ''}\n\n_Fonte: ${content.fonte || 'Desconhecida'}_`;
-        // 3. Send Messages Sequentially
+        let bodyText = content.resumo || '';
+        if (content.corpo && content.corpo.trim() !== '') {
+            bodyText += '\n\n' + content.corpo.trim();
+        }
+        const messageText = `*${content.titulo || 'Notícia'}*\n\n${bodyText}\n\n_Fonte: ${content.fonte || 'Desconhecida'}_`;
+        // 3. Retrieve User's Connected WhatsApp Instances
+        const userInstances = WhatsAppInstanceManager_1.default.getInstancesForUser(userId).filter(inst => inst.getStatus().state === 'open');
+        if (userInstances.length === 0) {
+            throw new Error(`No connected WhatsApp instances found for user ${userId}. Cannot broadcast.`);
+        }
+        logger_1.default.info(`[broadcast-worker]: Found ${userInstances.length} connected instances for user ${userId}. Using Round-Robin routing.`);
+        // 4. Send Messages Sequentially with Round-Robin
         let successCount = 0;
         let failCount = 0;
         for (let i = 0; i < contacts.length; i++) {
@@ -56,10 +66,14 @@ const broadcastProcessor = async (job) => {
                 status: 'pending'
             });
             try {
-                // 2. Add random delay between 5 to 15 seconds (5000ms - 15000ms) to avoid spam filters
-                const randomDelayMs = Math.floor(Math.random() * (15000 - 5000 + 1)) + 5000;
-                const messageId = await WhatsAppService_1.default.sendMessage(contact.phoneNumber, messageText, randomDelayMs, job.data.imagePath || undefined);
-                // 3. Mark as sent and associate messageId
+                // 2. Select Instance via Round-Robin
+                const instanceToUse = userInstances[i % userInstances.length];
+                const instanceId = instanceToUse.getInstanceId();
+                logger_1.default.info(`[broadcast-worker]: Routing message to contact ${contact.phoneNumber} via instance ${instanceId}`);
+                // 3. Use the provided delayMs or fallback to a default 3.5s delay
+                const delayMs = job.data.delayMs || 3500;
+                const messageId = await instanceToUse.sendMessage(contact.phoneNumber, messageText, delayMs, job.data.imagePath || undefined);
+                // 4. Mark as sent and associate messageId
                 await FeedHistoryService_1.default.updateMessageStatus(String(logRecord._id), 'sent', undefined, messageId);
                 successCount++;
             }
@@ -109,6 +123,10 @@ const broadcastProcessor = async (job) => {
                     });
                     // Throwing triggers BullMQ's exponential backoff and retry (max 3 attempts)
                     throw err;
+                }
+                else {
+                    // Not a timeout, just a regular error (like rate limit that was paused, or something else)
+                    logger_1.default.error(`[broadcast-worker]: Unhandled error for contact ${contact.phoneNumber}: ${err.message}. Skipping to next contact.`);
                 }
             }
             // Update Job Progress

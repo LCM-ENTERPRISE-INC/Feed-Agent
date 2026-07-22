@@ -40,12 +40,14 @@ export declare interface WhatsAppService {
   emit(event: 'wa:close',      reason?: number):     boolean;
   emit(event: 'wa:qr:timeout'):                      boolean;
   emit(event: 'message:status', payload: { messageId: string, status: 'delivered' | 'read' }): boolean;
+  emit(event: 'wa:message', payload: { instanceId: number, messageId: string, fromNumber: string, text: string, timestamp: number }): boolean;
 
   on(event: 'wa:qr',         listener: (qrBase64: string)  => void): this;
   on(event: 'wa:open',       listener: ()                  => void): this;
   on(event: 'wa:close',      listener: (reason?: number)   => void): this;
   on(event: 'wa:qr:timeout', listener: ()                  => void): this;
   on(event: 'message:status', listener: (payload: { messageId: string, status: 'delivered' | 'read' }) => void): this;
+  on(event: 'wa:message',    listener: (payload: { instanceId: number, messageId: string, fromNumber: string, text: string, timestamp: number }) => void): this;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -356,6 +358,41 @@ export class WhatsAppService extends EventEmitter {
           if (messageId && strStatus) {
             this.emit('message:status', { messageId, status: strStatus });
           }
+        }
+      }
+    });
+
+    // Handle new incoming messages (for real-time chat)
+    this.socket.ev.on('messages.upsert', async (m) => {
+      if (m.type !== 'notify') return; // Only process new messages
+      
+      for (const msg of m.messages) {
+        if (msg.key.fromMe || !msg.message || !msg.key.remoteJid) continue;
+        if (msg.key.remoteJid === 'status@broadcast') continue; // Ignore statuses
+        
+        const remoteJid = msg.key.remoteJid;
+        const fromNumber = remoteJid.split('@')[0]; // Simple normalization to phone number
+        
+        const messageId = msg.key.id || '';
+        let timestamp = Date.now();
+        if (typeof msg.messageTimestamp === 'number') {
+          timestamp = msg.messageTimestamp * 1000;
+        } else if (typeof msg.messageTimestamp === 'string') {
+          timestamp = parseInt(msg.messageTimestamp, 10) * 1000;
+        }
+
+        // Extract text (conversation for normal texts, extendedTextMessage for replies/links)
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+        
+        if (text) {
+          logger.info(`[whatsapp-${this.instanceId}]: Received message from ${fromNumber}`);
+          this.emit('wa:message', {
+            instanceId: this.instanceId,
+            messageId,
+            fromNumber,
+            text,
+            timestamp
+          });
         }
       }
     });

@@ -40,6 +40,47 @@ class NewsGeneratorService {
         await redisClient_1.default.setex(cacheKey, this.CACHE_TTL_SECONDS, JSON.stringify(article));
         return article;
     }
+    /**
+     * Generates a draft based on custom instructions, tone, and length.
+     * Does NOT use cache because of the highly variable nature of custom prompts.
+     */
+    async generateCustomDraft(sourceText, tone, length, instructions, sourceLabel) {
+        const customSystemPrompt = `Você é um jornalista de IA avançado escrevendo no formato JSON.
+Formato de saída obrigatório:
+{
+  "titulo": "Título da notícia",
+  "resumo": "Corpo/Resumo da notícia gerada aqui.",
+  "fonte": "${sourceLabel}"
+}
+Regras:
+1. Retorne APENAS um JSON válido. Não inclua Markdown, não inclua "Aqui está o resumo:" etc.
+2. O tom do texto deve ser: ${tone}.
+3. O tamanho máximo do resumo gerado deve ser de: ${length} caracteres. Seja estrito com esse limite de tamanho.
+4. Siga ESTRITAMENTE as seguintes instruções do usuário:
+   "${instructions}"`;
+        let textToAnalyze = sourceText;
+        if (sourceText.length > this.MAX_CHARS_PER_CHUNK) {
+            textToAnalyze = sourceText.substring(0, this.MAX_CHARS_PER_CHUNK); // Truncate to avoid context window explosion on custom queries
+            logger_1.default.warn(`[news-generator]: Custom draft source text truncated from ${sourceText.length} to ${this.MAX_CHARS_PER_CHUNK} chars.`);
+        }
+        const userPrompt = `Baseado no texto a seguir, gere a minuta da notícia seguindo as instruções dadas no prompt do sistema.\n\nTEXTO FONTE:\n${textToAnalyze}`;
+        const maxRetries = 2;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                logger_1.default.info(`[news-generator]: Requesting custom LLM generation (Attempt ${attempt}/${maxRetries})...`);
+                const responseText = await LlamaService_1.default.generateCompletion(userPrompt, customSystemPrompt, { format: 'json', temperature: 0.2 });
+                return this.parseAndValidateResponse(responseText);
+            }
+            catch (error) {
+                logger_1.default.warn(`[news-generator]: Custom Draft Attempt ${attempt} failed: ${error.message}`);
+                if (attempt === maxRetries) {
+                    logger_1.default.error(`[news-generator]: Exhausted all retries for custom JSON generation.`);
+                    throw new AppError_1.AppError('A IA não conseguiu gerar uma minuta estruturada válida após várias tentativas.', 500);
+                }
+            }
+        }
+        throw new AppError_1.AppError('Falha catastrófica no gerador de notícias.', 500);
+    }
     async processInChunks(text, maxRetries, cacheKey) {
         const chunks = [];
         for (let i = 0; i < text.length; i += this.MAX_CHARS_PER_CHUNK) {

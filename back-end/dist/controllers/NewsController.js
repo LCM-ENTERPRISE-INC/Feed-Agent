@@ -12,6 +12,7 @@ const NewsGeneratorService_1 = __importDefault(require("../services/NewsGenerato
 const DraftService_1 = __importDefault(require("../services/DraftService"));
 const bullmq_1 = require("bullmq");
 const fs_1 = __importDefault(require("fs"));
+const UrlScraperService_1 = __importDefault(require("../services/UrlScraperService"));
 class NewsController {
     /**
      * POST /api/news/upload
@@ -132,6 +133,41 @@ class NewsController {
             if (req.file?.path && fs_1.default.existsSync(req.file.path)) {
                 fs_1.default.unlinkSync(req.file.path);
             }
+            next(err);
+        }
+    }
+    /**
+     * POST /api/news/generate-ai-draft
+     * Endpoint for generating a draft from a URL or raw text input via Llama 3
+     */
+    async generateAiDraft(req, res, next) {
+        const startTime = Date.now();
+        try {
+            const { sourceContent, tone, length, instructions } = req.body;
+            if (!sourceContent || typeof sourceContent !== 'string') {
+                throw new AppError_1.AppError('sourceContent is required.', 400);
+            }
+            let textToProcess = sourceContent;
+            let sourceLabel = 'Texto Fornecido Pelo Usuário';
+            // Verify if sourceContent is a URL
+            const isUrl = /^https?:\/\//i.test(sourceContent.trim());
+            if (isUrl) {
+                textToProcess = await UrlScraperService_1.default.extractTextFromUrl(sourceContent.trim());
+                sourceLabel = sourceContent.trim();
+            }
+            // Generate Draft
+            const articleJson = await NewsGeneratorService_1.default.generateCustomDraft(textToProcess, tone || 'Informativo', length || 500, instructions || '', sourceLabel);
+            // Save to database
+            const draft = await DraftService_1.default.createDraft(req.user.userId, textToProcess, articleJson);
+            const processingTimeMs = Date.now() - startTime;
+            const payload = {
+                draftId: draft.id,
+                processingTimeMs,
+                article: articleJson,
+            };
+            ApiResponse_1.ApiResponse.success(res, payload, 'AI Draft generated successfully.', 200);
+        }
+        catch (err) {
             next(err);
         }
     }

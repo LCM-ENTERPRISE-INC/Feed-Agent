@@ -102,4 +102,31 @@ router.get('/job/:jobId/stream', NewsController_1.default.streamJobStatus.bind(N
  *         description: Image is unreadable or OCR confidence is below 60%.
  */
 router.post('/generate-draft', rateLimiter_1.aiProcessingLimiter, uploadMiddleware_1.uploadNewsSource, NewsController_1.default.generateDraft.bind(NewsController_1.default));
+/**
+ * @openapi
+ * /api/news/generate-ai-draft:
+ *   post:
+ *     summary: Generate a news draft from a URL or text using Llama 3
+ *     description: Accepts a text snippet or URL, extracts its content, and runs a custom prompt through the local Llama model.
+ *     tags: [News]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               sourceContent:
+ *                 type: string
+ *               tone:
+ *                 type: string
+ *               length:
+ *                 type: integer
+ *               instructions:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Draft generated successfully.
+ */
+router.post('/generate-ai-draft', rateLimiter_1.aiProcessingLimiter, NewsController_1.default.generateAiDraft.bind(NewsController_1.default));
 exports.default = router;

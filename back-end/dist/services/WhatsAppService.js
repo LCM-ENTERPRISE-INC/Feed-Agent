@@ -50,7 +50,6 @@ const baileys_2 = require("@whiskeysockets/baileys");
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
-const SESSIONS_DIR = path_1.default.resolve(process.cwd(), 'sessions');
 const QR_TIMEOUT_MS = 60_000; // 60 seconds before a new QR cycle is triggered
 // ─────────────────────────────────────────────────────────────────────────────
 // WhatsAppService — Singleton
@@ -67,14 +66,27 @@ class WhatsAppService extends events_1.EventEmitter {
     socket = null;
     qrTimeoutRef = null;
     reconnectTimeoutRef = null;
+    isManualOperation = false; // Prevents auto-reconnect during manual restart/logout
     status = {
         state: whatsapp_types_1.WaConnectionState.CLOSE,
         lastUpdated: new Date(),
     };
-    constructor() {
+    instanceId;
+    userId;
+    sessionDir;
+    constructor(instanceId, userId) {
         super();
+        this.instanceId = instanceId;
+        this.userId = userId;
+        this.sessionDir = path_1.default.resolve(process.cwd(), `sessions/instance_${instanceId}`);
         // Avoid Node.js MaxListenersExceededWarning for many SSE clients
         this.setMaxListeners(50);
+    }
+    getInstanceId() {
+        return this.instanceId;
+    }
+    getUserId() {
+        return this.userId;
     }
     // ─── Public API ───────────────────────────────────────────────────────────
     /**
@@ -83,16 +95,25 @@ class WhatsAppService extends events_1.EventEmitter {
      * generated, emitted via `wa:qr` event, and available in `getStatus()`.
      */
     async initialize() {
-        if (!fs_1.default.existsSync(SESSIONS_DIR)) {
-            fs_1.default.mkdirSync(SESSIONS_DIR, { recursive: true });
+        if (!fs_1.default.existsSync(this.sessionDir)) {
+            fs_1.default.mkdirSync(this.sessionDir, { recursive: true });
         }
         const { version } = await (0, baileys_1.fetchLatestBaileysVersion)();
-        logger_1.default.info(`[whatsapp]: Using Baileys v${version.join('.')}`);
-        const { state: authState, saveCreds } = await (0, baileys_1.useMultiFileAuthState)(SESSIONS_DIR);
+        logger_1.default.info(`[whatsapp-${this.instanceId}]: Using Baileys v${version.join('.')}`);
+        const { state: authState, saveCreds } = await (0, baileys_1.useMultiFileAuthState)(this.sessionDir);
+        const dummyLogger = {
+            level: 'silent',
+            child: () => dummyLogger,
+            info: () => { },
+            debug: () => { },
+            warn: () => { },
+            error: () => { },
+            trace: () => { },
+        };
         this.socket = (0, baileys_1.default)({
             version,
             auth: authState,
-            logger: { level: 'silent' },
+            logger: dummyLogger,
             printQRInTerminal: false,
         });
         this._registerEventListeners(saveCreds);
@@ -126,7 +147,20 @@ class WhatsAppService extends events_1.EventEmitter {
         }
         // 1. Sanitize and format the number to Baileys JID format
         const sanitized = (0, phoneUtils_1.sanitizePhoneNumber)(phoneNumber);
-        const jid = (0, phoneUtils_1.toWhatsAppJid)(sanitized);
+        let jid = (0, phoneUtils_1.toWhatsAppJid)(sanitized);
+        // 1.5. Resolve the actual registered JID on WhatsApp (fixes Brazilian 9th digit issue)
+        try {
+            const results = await this.socket.onWhatsApp(sanitized);
+            if (results && results.length > 0) {
+                const result = results[0];
+                if (result.exists) {
+                    jid = result.jid;
+                }
+            }
+        }
+        catch (err) {
+            logger_1.default.warn(`[whatsapp]: Could not resolve onWhatsApp for ${sanitized}: ${err}`);
+        }
         // 2. Simulate typing presence to make it feel human
         await this.socket.presenceSubscribe(jid);
         await (0, baileys_2.delay)(500);
@@ -147,6 +181,53 @@ class WhatsAppService extends events_1.EventEmitter {
         }
         logger_1.default.info(`[whatsapp]: Message sent successfully to ${jid}`);
         return sentMsg?.key?.id || '';
+    }
+    /**
+     * Manually logs out from the current Baileys session and cleans up disk files.
+     * Emits 'wa:close' to notify clients that the session was ended by the user.
+     */
+    async logout() {
+        logger_1.default.info(`[whatsapp-${this.instanceId}]: Manual logout requested by user.`);
+        this.isManualOperation = true;
+        try {
+            if (this.socket) {
+                // Run logout with a 3-second timeout to prevent hanging the API if Baileys is stuck
+                await Promise.race([
+                    this.socket.logout('Manual logout requested via API').catch(() => { }),
+                    new Promise(resolve => setTimeout(resolve, 3000))
+                ]);
+            }
+            this._closeSocket();
+            this._updateStatus(whatsapp_types_1.WaConnectionState.CLOSE);
+            this._deleteSessionDir();
+            this.emit('wa:close');
+        }
+        catch (err) {
+            logger_1.default.error(`[whatsapp-${this.instanceId}]: Error during logout: ${err}`);
+            this._deleteSessionDir();
+        }
+        finally {
+            this.isManualOperation = false;
+        }
+    }
+    /**
+     * Restarts the current session and clears files to force a new QR generation.
+     */
+    async restart() {
+        logger_1.default.info(`[whatsapp-${this.instanceId}]: Manual restart requested by user.`);
+        this.isManualOperation = true;
+        try {
+            this._closeSocket();
+            this._updateStatus(whatsapp_types_1.WaConnectionState.CLOSE);
+            this._deleteSessionDir();
+            await this.initialize();
+        }
+        catch (err) {
+            logger_1.default.error(`[whatsapp-${this.instanceId}]: Error during restart: ${err}`);
+        }
+        finally {
+            this.isManualOperation = false;
+        }
     }
     // ─── Private Helpers ──────────────────────────────────────────────────────
     /**
@@ -208,25 +289,28 @@ class WhatsAppService extends events_1.EventEmitter {
                 const shouldReconnect = !isLoggedOut && !isBanned;
                 this._updateStatus(whatsapp_types_1.WaConnectionState.CLOSE);
                 if (isBanned) {
-                    logger_1.default.error(`[whatsapp]: 🚨 CRITICAL ALERT: WhatsApp account has been BANNED or FORBIDDEN (Code: 403).`);
+                    logger_1.default.error(`[whatsapp-${this.instanceId}]: 🚨 CRITICAL ALERT: WhatsApp account has been BANNED or FORBIDDEN (Code: 403).`);
                     this.emit('wa:close', reason);
-                    this._clearSession();
+                    this._deleteSessionDir();
                 }
                 else if (isLoggedOut) {
-                    logger_1.default.warn('[whatsapp]: Logged out from device. Clearing session files...');
+                    logger_1.default.warn(`[whatsapp-${this.instanceId}]: Logged out from device. Clearing session files...`);
                     this.emit('wa:close', reason);
-                    this._clearSession();
+                    this._deleteSessionDir();
                 }
                 else {
-                    logger_1.default.warn(`[whatsapp]: Connection closed. Reason code: ${reason}. Reconnecting in 5s...`);
+                    logger_1.default.warn(`[whatsapp-${this.instanceId}]: Connection closed. Reason code: ${reason}. ${this.isManualOperation ? 'Manual operation in progress, skipping auto-reconnect.' : 'Reconnecting in 5s...'}`);
                     this.emit('wa:close', reason);
-                    if (this.reconnectTimeoutRef) {
-                        clearTimeout(this.reconnectTimeoutRef);
+                    // Don't auto-reconnect if this was triggered by a manual restart/logout
+                    if (!this.isManualOperation) {
+                        if (this.reconnectTimeoutRef) {
+                            clearTimeout(this.reconnectTimeoutRef);
+                        }
+                        this.reconnectTimeoutRef = setTimeout(() => {
+                            this.reconnectTimeoutRef = null;
+                            this.initialize().catch(() => { });
+                        }, 5_000);
                     }
-                    this.reconnectTimeoutRef = setTimeout(() => {
-                        this.reconnectTimeoutRef = null;
-                        this.initialize().catch(() => { });
-                    }, 5_000);
                 }
             }
         });
@@ -245,6 +329,39 @@ class WhatsAppService extends events_1.EventEmitter {
                     if (messageId && strStatus) {
                         this.emit('message:status', { messageId, status: strStatus });
                     }
+                }
+            }
+        });
+        // Handle new incoming messages (for real-time chat)
+        this.socket.ev.on('messages.upsert', async (m) => {
+            if (m.type !== 'notify')
+                return; // Only process new messages
+            for (const msg of m.messages) {
+                if (msg.key.fromMe || !msg.message || !msg.key.remoteJid)
+                    continue;
+                if (msg.key.remoteJid === 'status@broadcast')
+                    continue; // Ignore statuses
+                const remoteJid = msg.key.remoteJid;
+                const fromNumber = remoteJid.split('@')[0]; // Simple normalization to phone number
+                const messageId = msg.key.id || '';
+                let timestamp = Date.now();
+                if (typeof msg.messageTimestamp === 'number') {
+                    timestamp = msg.messageTimestamp * 1000;
+                }
+                else if (typeof msg.messageTimestamp === 'string') {
+                    timestamp = parseInt(msg.messageTimestamp, 10) * 1000;
+                }
+                // Extract text (conversation for normal texts, extendedTextMessage for replies/links)
+                const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+                if (text) {
+                    logger_1.default.info(`[whatsapp-${this.instanceId}]: Received message from ${fromNumber}`);
+                    this.emit('wa:message', {
+                        instanceId: this.instanceId,
+                        messageId,
+                        fromNumber,
+                        text,
+                        timestamp
+                    });
                 }
             }
         });
@@ -279,12 +396,36 @@ class WhatsAppService extends events_1.EventEmitter {
         }
     }
     /** Removes all session files, forcing a fresh QR scan on next initialize(). */
-    _clearSession() {
-        if (fs_1.default.existsSync(SESSIONS_DIR)) {
-            fs_1.default.rmSync(SESSIONS_DIR, { recursive: true, force: true });
-            logger_1.default.info('[whatsapp]: Session directory cleared.');
+    _deleteSessionDir() {
+        if (fs_1.default.existsSync(this.sessionDir)) {
+            try {
+                fs_1.default.rmSync(this.sessionDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+                logger_1.default.info(`[whatsapp-${this.instanceId}]: Session directory cleared.`);
+            }
+            catch (err) {
+                logger_1.default.error(`[whatsapp-${this.instanceId}]: Failed to clear session directory, trying to delete files individually: ${err}`);
+                try {
+                    const files = fs_1.default.readdirSync(this.sessionDir);
+                    for (const file of files) {
+                        try {
+                            const filePath = path_1.default.join(this.sessionDir, file);
+                            if (fs_1.default.lstatSync(filePath).isDirectory()) {
+                                fs_1.default.rmSync(filePath, { recursive: true, force: true });
+                            }
+                            else {
+                                fs_1.default.unlinkSync(filePath);
+                            }
+                        }
+                        catch (fileErr) {
+                            logger_1.default.warn(`[whatsapp-${this.instanceId}]: Could not delete file ${file}: ${fileErr}`);
+                        }
+                    }
+                }
+                catch (dirErr) {
+                    logger_1.default.error(`[whatsapp-${this.instanceId}]: Error reading session directory: ${dirErr}`);
+                }
+            }
         }
     }
 }
 exports.WhatsAppService = WhatsAppService;
-exports.default = new WhatsAppService();

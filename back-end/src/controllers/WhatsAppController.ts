@@ -177,6 +177,63 @@ export class WhatsAppController {
   }
 
   /**
+   * GET /api/whatsapp/instances/:id/messages/stream
+   * Opens an SSE stream to receive real-time messages from this instance.
+   */
+  streamMessages(req: Request, res: Response): void {
+    const userId = req.user?.userId;
+    const instanceId = parseInt(req.params.id as string, 10);
+
+    if (!userId || isNaN(instanceId)) {
+      res.status(400).end();
+      return;
+    }
+
+    const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
+    if (!liveInstance || liveInstance.getUserId() !== userId) {
+      res.status(404).json({ message: 'Instance not found or not active.' });
+      return;
+    }
+
+    // ── Set SSE headers ───────────────────────────────────────────────────
+    res.setHeader('Content-Type',                'text/event-stream');
+    res.setHeader('Cache-Control',               'no-cache, no-transform');
+    res.setHeader('Connection',                  'keep-alive');
+    res.setHeader('X-Accel-Buffering',           'no');
+    res.flushHeaders();
+
+    logger.info(`[whatsapp-messages-sse]: Client connected for instance ${instanceId}`);
+
+    // Helper to push typed SSE events
+    const pushEvent = (event: string, data: object | null = null): void => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data ?? {})}\n\n`);
+    };
+
+    // Confirm connection immediately
+    pushEvent('connected', { instanceId, message: 'Listening for incoming messages...' });
+
+    // Handle incoming messages
+    const onMessage = (payload: any) => {
+      pushEvent('message', payload);
+    };
+
+    liveInstance.on('wa:message', onMessage);
+
+    // Heartbeat
+    const heartbeat = setInterval(() => {
+      pushEvent('heartbeat', { ts: new Date().toISOString() });
+    }, SSE_HEARTBEAT_MS);
+
+    // Cleanup on close
+    req.on('close', () => {
+      logger.info(`[whatsapp-messages-sse]: Client disconnected for instance ${instanceId}`);
+      clearInterval(heartbeat);
+      liveInstance.off('wa:message', onMessage);
+    });
+  }
+
+  /**
    * POST /api/whatsapp/instances/:id/test-message
    */
   async sendTestMessage(req: Request, res: Response, next: NextFunction): Promise<void> {
