@@ -81,6 +81,55 @@ model WhatsAppInstance {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warmupProfile WarmupProfile?
+
   
   @@map("whatsapp_instances")
 }
+
+enum WarmupPhase {
+  PHASE_1
+  PHASE_2
+  PHASE_3
+}
+
+enum WarmupStatus {
+  IDLE
+  WARMING
+  COOLING_DOWN
+  PAUSED
+  BANNED
+  COMPLETED
+}
+
+model WarmupProfile {
+  id                Int         @id @default(autoincrement())
+  instanceId        Int         @unique @map("instance_id")
+  name              String
+  currentPhase      WarmupPhase @default(PHASE_1) @map("current_phase")
+  status            WarmupStatus @default(IDLE)
+  dailyLimit        Int         @default(10) @map("daily_limit")
+  messagesSentToday Int         @default(0) @map("messages_sent_today")
+  startDate         DateTime    @default(now()) @map("start_date")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  instance          WhatsAppInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  statusHistory     WarmupStatusHistory[]
+
+  @@map("warmup_profiles")
+}
+
+model WarmupStatusHistory {
+  id              Int          @id @default(autoincrement())
+  profileId       Int          @map("profile_id")
+  previousStatus  WarmupStatus @map("previous_status")
+  newStatus       WarmupStatus @map("new_status")
+  reason          String?
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  profile         WarmupProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("warmup_status_history")
+}
+
