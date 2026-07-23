@@ -9,8 +9,11 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   downloadMediaMessage,
 } from '@whiskeysockets/baileys';
+import QRCode from 'qrcode';
 import { Boom } from '@hapi/boom';
-import qrcode from 'qrcode';
+import { WarmupStatusViewerService } from '../Warm-up/services/WarmupStatusViewerService';
+import { WarmupGroupReaderService } from '../Warm-up/services/WarmupGroupReaderService';
+import { WarmupIndividualReaderService } from '../Warm-up/services/WarmupIndividualReaderService';
 import logger from '../utils/logger';
 import { WaConnectionState, WaStatus } from '../types/whatsapp.types';
 import { sanitizePhoneNumber, toWhatsAppJid } from '../utils/phoneUtils';
@@ -335,7 +338,7 @@ export class WhatsAppService extends EventEmitter {
 
         let qrBase64: string;
         try {
-          qrBase64 = await qrcode.toDataURL(qr);
+          qrBase64 = await QRCode.toDataURL(qr);
         } catch {
           logger.warn('[whatsapp]: QR encoding failed.');
           qrBase64 = '';
@@ -425,15 +428,31 @@ export class WhatsAppService extends EventEmitter {
 
     // Handle new incoming messages (for real-time chat)
     this.socket.ev.on('messages.upsert', async (m) => {
-      if (m.type !== 'notify') return; // Only process new messages
+    if (m.type !== 'notify') return; // Only process new messages
       
       for (const msg of m.messages) {
         if (msg.key.fromMe || !msg.message || !msg.key.remoteJid) continue;
-        if (msg.key.remoteJid === 'status@broadcast') continue; // Ignore statuses
+        
+        // Pass status broadcasts to Warmup module instead of just ignoring them completely
+        if (msg.key.remoteJid === 'status@broadcast') {
+          await WarmupStatusViewerService.handleIncomingStatus(this.instanceId.toString(), msg, this.socket!);
+          continue; 
+        }
+
+        // --- WARMUP INTERCEPTION: Individual DMs ---
+        if (!msg.key.fromMe && !msg.key.remoteJid?.endsWith('@g.us')) {
+          await WarmupIndividualReaderService.handleIncomingMessage(this.instanceId.toString(), msg, this.socket!);
+        }
         
         const remoteJid = msg.key.remoteJid;
         const fromNumber = remoteJid.split('@')[0]; // Simple normalization to phone number
         
+        // Pass group messages to Warmup module for passive viewing, but DO NOT stop processing
+        if (remoteJid.endsWith('@g.us')) {
+          await WarmupGroupReaderService.handleIncomingGroupMessage(this.instanceId.toString(), msg, this.socket!);
+          // Notice: We don't 'continue;' here because actual CRM features might need the group message.
+        }
+
         const messageId = msg.key.id || '';
         let timestamp = Date.now();
         if (typeof msg.messageTimestamp === 'number') {

@@ -116,6 +116,7 @@ model WarmupProfile {
 
   instance          WhatsAppInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
   statusHistory     WarmupStatusHistory[]
+  seedContacts      WarmupSeedContact[]
 
   @@map("warmup_profiles")
 }
@@ -131,5 +132,18 @@ model WarmupStatusHistory {
   profile         WarmupProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@map("warmup_status_history")
+}
+
+model WarmupSeedContact {
+  id             Int           @id @default(autoincrement())
+  profileId      Int           @map("profile_id")
+  phoneNumber    String        @map("phone_number")
+  name           String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  profile        WarmupProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, phoneNumber])
+  @@map("warmup_seed_contacts")
 }
 

@@ -6,6 +6,7 @@ import whatsAppInstanceManager from '../services/WhatsAppInstanceManager';
 import feedHistoryService from '../services/FeedHistoryService';
 import contactService from '../services/ContactService';
 import { Contact } from '@prisma/client';
+import { WarmupBroadcastIntegrationService } from '../Warm-up/services/WarmupBroadcastIntegrationService';
 
 export const BROADCAST_QUEUE_NAME = 'broadcast-processing-queue';
 
@@ -49,10 +50,8 @@ export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
       }
       const messageText = `*${content.titulo || 'Notícia'}*\n\n${bodyText}\n\n_Fonte: ${content.fonte || 'Desconhecida'}_`;
 
-      // 3. Retrieve User's Connected WhatsApp Instances
-      const userInstances = whatsAppInstanceManager.getInstancesForUser(userId).filter(
-        inst => inst.getStatus().state === 'open'
-      );
+      // 3. Retrieve User's Connected WhatsApp Instances (Filtered by Warm-up Status)
+      const userInstances = await WarmupBroadcastIntegrationService.getEligibleInstancesForBroadcast(userId);
       
       if (userInstances.length === 0) {
         throw new Error(`No connected WhatsApp instances found for user ${userId}. Cannot broadcast.`);
