@@ -151,17 +151,20 @@ export class WhatsAppController {
     } else {
       pushEvent(current.state === 'open' ? 'connected' : 'disconnected', { state: current.state });
     }
+    pushEvent('health', { score: liveInstance.getHealthScore() });
 
     // ── Register event handlers ───────────────────────────────────────────
     const onQr         = (qrCode: string)  => pushEvent('qr',           { qrCode });
     const onOpen       = ()                => pushEvent('connected',     null);
     const onClose      = (reason?: number) => pushEvent('disconnected',  { reason: reason ?? null });
     const onQrTimeout  = ()                => pushEvent('qr:timeout',    null);
+    const onHealth     = (score: number)   => pushEvent('health',        { score });
 
     liveInstance.on('wa:qr',         onQr);
     liveInstance.on('wa:open',       onOpen);
     liveInstance.on('wa:close',      onClose);
     liveInstance.on('wa:qr:timeout', onQrTimeout);
+    liveInstance.on('wa:health',     onHealth);
 
     // ── Heartbeat — keeps connection alive through proxies ────────────────
     const heartbeat = setInterval(() => {
@@ -176,6 +179,7 @@ export class WhatsAppController {
       liveInstance.off('wa:open',       onOpen);
       liveInstance.off('wa:close',      onClose);
       liveInstance.off('wa:qr:timeout', onQrTimeout);
+      liveInstance.off('wa:health',     onHealth);
     });
   }
 

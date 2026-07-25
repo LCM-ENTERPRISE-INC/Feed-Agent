@@ -46,6 +46,7 @@ export declare interface WhatsAppService {
   emit(event: 'wa:open'):                            boolean;
   emit(event: 'wa:close',      reason?: number):     boolean;
   emit(event: 'wa:qr:timeout'):                      boolean;
+  emit(event: 'wa:health',     score: number):       boolean;
   emit(event: 'message:status', payload: { messageId: string, status: 'delivered' | 'read' }): boolean;
   emit(event: 'wa:message', payload: { instanceId: number, messageId: string, fromNumber: string, text: string, timestamp: number, mediaUrl?: string, mediaType?: string }): boolean;
 
@@ -53,6 +54,7 @@ export declare interface WhatsAppService {
   on(event: 'wa:open',       listener: ()                  => void): this;
   on(event: 'wa:close',      listener: (reason?: number)   => void): this;
   on(event: 'wa:qr:timeout', listener: ()                  => void): this;
+  on(event: 'wa:health',     listener: (score: number)     => void): this;
   on(event: 'message:status', listener: (payload: { messageId: string, status: 'delivered' | 'read' }) => void): this;
   on(event: 'wa:message',    listener: (payload: { instanceId: number, messageId: string, fromNumber: string, text: string, timestamp: number, mediaUrl?: string, mediaType?: string }) => void): this;
 }
@@ -78,6 +80,8 @@ export class WhatsAppService extends EventEmitter {
     state:       WaConnectionState.CLOSE,
     lastUpdated: new Date(),
   };
+
+  private healthScore: number = 100;
 
   private instanceId: number;
   private userId: number;
@@ -135,6 +139,10 @@ export class WhatsAppService extends EventEmitter {
 
       browserConfig = [os, browser, '1.0.0'];
       logger.info(`[whatsapp-${this.instanceId}]: Emulating Browser -> ${os} / ${browser}`);
+    }
+
+    if (instanceData?.healthScore !== undefined) {
+      this.healthScore = instanceData.healthScore;
     }
 
     let proxyAgent: HttpsProxyAgent<string> | undefined;
@@ -569,6 +577,27 @@ export class WhatsAppService extends EventEmitter {
   }
 
   /** Destroys the active socket, triggering a 'close' event. */
+  public getHealthScore(): number {
+    return this.healthScore;
+  }
+
+  public async setHealthScore(score: number): Promise<void> {
+    this.healthScore = Math.max(0, Math.min(100, score));
+    this.emit('wa:health', this.healthScore);
+    try {
+      await prisma.whatsAppInstance.update({
+        where: { id: this.instanceId },
+        data: { healthScore: this.healthScore }
+      });
+    } catch (e) {
+      logger.error(`[whatsapp-${this.instanceId}]: Failed to update health score: ${e}`);
+    }
+  }
+
+  public async deductHealth(points: number): Promise<void> {
+    await this.setHealthScore(this.healthScore - points);
+  }
+
   private _closeSocket(): void {
     if (this.reconnectTimeoutRef) {
       clearTimeout(this.reconnectTimeoutRef);

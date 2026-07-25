@@ -79,6 +79,7 @@ model WhatsAppInstance {
   status    String   @default("DISCONNECTED")
   userAgent String?  @map("user_agent")
   proxyUrl  String?  @map("proxy_url")
+  healthScore Int    @default(100) @map("health_score")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
