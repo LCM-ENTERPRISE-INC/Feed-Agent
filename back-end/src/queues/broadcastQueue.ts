@@ -128,6 +128,7 @@ export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
               logger.error(`[broadcast-worker]: Failed to deactivate contact ${contact.id}: ${(dbErr as Error).message}`);
             }
             await feedHistoryService.updateMessageStatus(String(logRecord._id), 'failed', 'invalid_number');
+            await instanceToUse.deductHealth(5); // Penalidade leve por número inválido
           } else {
             // 3. Mark as failed normally
             await feedHistoryService.updateMessageStatus(String(logRecord._id), 'failed', err.message);
@@ -151,9 +152,11 @@ export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
 
           if (isRateLimited) {
             logger.warn(`[broadcast-worker]: Temporary block detected. Pausing worker for 60 seconds...`);
+            await instanceToUse.deductHealth(30); // Penalidade pesada por rate limit
             await new Promise(res => setTimeout(res, 60000));
           } else if (isTimeoutOrNetworkError) {
             logger.error(`[broadcast-worker]: Network timeout. Re-queuing remaining ${contacts.length - i} contacts.`);
+            await instanceToUse.deductHealth(2); // Penalidade mínima por instabilidade
             // Update job data to only include remaining contacts
             await job.updateData({
               ...job.data,
@@ -163,6 +166,9 @@ export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
             throw err;
           } else {
             // Not a timeout, just a regular error (like rate limit that was paused, or something else)
+            if (!isInvalidNumber) {
+              await instanceToUse.deductHealth(10);
+            }
             logger.error(`[broadcast-worker]: Unhandled error for contact ${contact.phoneNumber}: ${err.message}. Skipping to next contact.`);
           }
         }
