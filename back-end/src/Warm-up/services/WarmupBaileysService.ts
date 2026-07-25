@@ -73,6 +73,28 @@ export class WarmupBaileysService {
   }
 
   /**
+   * Simulates a human opening the app and navigating to a chat to see if their message was read.
+   * This sends a presence update of 'available' for a few seconds.
+   */
+  static async simulateCheckingSentMessage(socket: WASocket, jid: string): Promise<void> {
+    logger.info(`[Warmup] Simulating human checking sent message in chat ${jid}`);
+    try {
+      await socket.presenceSubscribe(jid);
+      await delay(Math.floor(Math.random() * 500) + 200);
+      
+      await socket.sendPresenceUpdate('available', jid);
+      
+      // Simulate reading/staring at the chat for 2 to 8 seconds
+      const stareTime = Math.floor(Math.random() * 6000) + 2000;
+      await delay(stareTime);
+      
+      await socket.sendPresenceUpdate('paused', jid);
+    } catch (err) {
+      logger.error(`[Warmup] Failed to simulate checking sent message for ${jid}:`, err);
+    }
+  }
+
+  /**
    * Simulates a human recording an audio message.
    * Uses the provided audio duration (or a default) to simulate the 'recording' presence.
    * Adds a small random jitter to the duration.

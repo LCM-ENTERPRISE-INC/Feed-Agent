@@ -96,6 +96,19 @@ export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
           // 4. Mark as sent and associate messageId
           await feedHistoryService.updateMessageStatus(String(logRecord._id), 'sent', undefined, messageId);
           successCount++;
+          
+          // 5. Simular comportamento orgânico: chance de checar a leitura da mensagem minutos depois
+          if (Math.random() > 0.5) {
+             try {
+                const { WarmupQueue } = require('../Warm-up/queues/WarmupQueue');
+                const { sanitizePhoneNumber, toWhatsAppJid } = require('../utils/phoneUtils');
+                const checkDelay = Math.floor(Math.random() * 270000) + 30000;
+                const targetJid = toWhatsAppJid(sanitizePhoneNumber(contact.phoneNumber));
+                await WarmupQueue.addCheckSentJob({ instanceId: String(instanceId), targetJid }, checkDelay);
+             } catch(e) {
+                logger.warn(`[broadcast-worker]: Could not schedule check_sent job for ${contact.phoneNumber}`);
+             }
+          }
         } catch (error) {
           const err = error as any;
           logger.error(`[broadcast-worker]: Failed to send to ${contact.phoneNumber}: ${err.message}`);

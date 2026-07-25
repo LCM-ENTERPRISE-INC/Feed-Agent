@@ -217,16 +217,15 @@ export class WhatsAppService extends EventEmitter {
       logger.warn(`[whatsapp]: Could not resolve onWhatsApp for ${sanitized}: ${err}`);
     }
 
-    // 2. Simulate typing presence to make it feel human
-    await this.socket.presenceSubscribe(jid);
-    await delay(500);
-    await this.socket.sendPresenceUpdate('composing', jid);
+    // 2. Simulate typing presence to make it feel human using Warmup Heuristics
+    const { WarmupBaileysService } = require('../Warm-up/services/WarmupBaileysService');
+    await WarmupBaileysService.simulateHumanTyping(this.socket, jid, text.length);
 
-    // 3. Artificial delay (configurable, helps prevent spam detection)
-    await delay(delayMs);
+    // 3. Optional extra pacing delay (from queue)
+    if (delayMs > 0) {
+      await delay(delayMs);
+    }
 
-    // 4. Send the actual message (with optional image) and clear typing status
-    await this.socket.sendPresenceUpdate('paused', jid);
     
     let sentMsg;
     if (imagePath && fs.existsSync(imagePath)) {

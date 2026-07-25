@@ -71,7 +71,13 @@ export interface WarmupEventReplyJob {
   shouldDelete?: boolean;
 }
 
-export type WarmupJobData = WarmupMessageJob | WarmupStatusJob | WarmupGroupReadJob | WarmupStatusPostJob | WarmupSeedMessageJob | WarmupIndividualReadJob | WarmupEventReplyJob;
+export interface WarmupCheckSentMessageJob {
+  type: 'check_sent';
+  instanceId: string;
+  targetJid: string;
+}
+
+export type WarmupJobData = WarmupMessageJob | WarmupStatusJob | WarmupGroupReadJob | WarmupStatusPostJob | WarmupSeedMessageJob | WarmupIndividualReadJob | WarmupEventReplyJob | WarmupCheckSentMessageJob;
 
 const QUEUE_NAME = 'warmup-message-queue';
 
@@ -141,6 +147,18 @@ export class WarmupQueue {
           }
         }
 
+        // Specific handling for checking sent messages
+        if (job.data.type === 'check_sent') {
+          try {
+            await WarmupBaileysService.simulateCheckingSentMessage(socket, job.data.targetJid);
+            warmupLogger.info(`[WarmupQueue] Successfully processed check_sent job ${job.id} for instance ${instanceId}`);
+            return;
+          } catch (error) {
+            warmupLogger.error(`[WarmupQueue] Failed to process check_sent job ${job.id}`, error);
+            throw error;
+          }
+        }
+
         // Specific handling for individual reads (Blue Ticks)
         if (job.data.type === 'individual_read') {
           try {
@@ -185,6 +203,12 @@ export class WarmupQueue {
               isAiGenerated: true,
               metadata: { type: 'event_reply' }
             });
+
+            // Agendar verificação da mensagem enviada (50% de chance)
+            if (Math.random() > 0.5) {
+               const checkDelay = Math.floor(Math.random() * 270000) + 30000; // 30s to 5m
+               await WarmupQueue.addCheckSentJob({ instanceId, targetJid: job.data.targetJid }, checkDelay);
+            }
 
             if (job.data.correction) {
               warmupLogger.info(`[WarmupQueue] Sending typo correction for event reply...`);
@@ -243,6 +267,14 @@ export class WarmupQueue {
           try {
             await WarmupSeedMessagingService.executeSeedMessage(socket, instanceId, job.data.seedPhone);
             await WarmupCacheService.incrementMessagesSent(instanceId);
+            
+            // Agendar verificação da mensagem enviada (50% de chance)
+            if (Math.random() > 0.5) {
+               const targetJid = `${job.data.seedPhone}@s.whatsapp.net`;
+               const checkDelay = Math.floor(Math.random() * 270000) + 30000;
+               await WarmupQueue.addCheckSentJob({ instanceId, targetJid }, checkDelay);
+            }
+            
             warmupLogger.info(`[WarmupQueue] Successfully processed seed message job ${job.id} for instance ${instanceId}`);
             return;
           } catch (error) {
@@ -265,6 +297,12 @@ export class WarmupQueue {
                 isAiGenerated: false,
                 metadata: { type: 'standard_message' }
               });
+              
+              // Agendar verificação da mensagem enviada (50% de chance)
+              if (Math.random() > 0.5) {
+                 const checkDelay = Math.floor(Math.random() * 270000) + 30000;
+                 await WarmupQueue.addCheckSentJob({ instanceId, targetJid }, checkDelay);
+              }
             } else if (messageType === 'image') {
               // Future-proofing for media sends if needed
               warmupLogger.info(`[WarmupQueue] Image sending not fully implemented yet for Warmup. Skipping.`);
@@ -365,6 +403,16 @@ export class WarmupQueue {
     const jobData: WarmupJobData = { ...data, type: 'event_reply' };
     const job = await this.queue.add('event-reply', jobData, { delay: delayMs });
     warmupLogger.info(`[WarmupQueue] Event Reply Job ${job.id} added for instance ${data.instanceId} with delay ${delayMs}ms`);
+    return job;
+  }
+
+  /**
+   * Enqueues a check sent message job.
+   */
+  static async addCheckSentJob(data: Omit<WarmupCheckSentMessageJob, 'type'>, delayMs: number = 0): Promise<Job<WarmupJobData>> {
+    const jobData: WarmupJobData = { ...data, type: 'check_sent' };
+    const job = await this.queue.add('check-sent', jobData, { delay: delayMs });
+    warmupLogger.info(`[WarmupQueue] Check Sent Job ${job.id} added for instance ${data.instanceId} to ${data.targetJid} with delay ${delayMs}ms`);
     return job;
   }
 
