@@ -62,6 +62,8 @@ describe('WarmupMetricsService', () => {
       isVolatilePaused: false,
       lastActionTimestamp: 123456789,
       uptimeHours: 2,
+      riskLevel: 'HIGH',
+      trustScore: 50,
     });
   });
 

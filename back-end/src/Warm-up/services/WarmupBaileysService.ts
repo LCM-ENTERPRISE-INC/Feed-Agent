@@ -20,27 +20,53 @@ export class WarmupBaileysService {
     }
   }
 
-  /**
-   * Simulates a human typing a message.
-   * Calculates typing duration based on text length (assuming avg 200 CPM -> ~3.3 chars per sec -> ~300ms per char).
-   * Minimum typing time: 1500ms. Maximum: 8000ms (to prevent hanging).
-   */
   static async simulateHumanTyping(socket: WASocket, jid: string, textLength: number): Promise<void> {
-    const msPerChar = 250 + Math.floor(Math.random() * 100); // 250-350ms per character
-    let typingDuration = textLength * msPerChar;
+    const msPerChar = 200 + Math.floor(Math.random() * 150); // 200-350ms per character
+    let totalTypingTime = textLength * msPerChar;
     
-    if (typingDuration < 1500) typingDuration = 1500;
-    if (typingDuration > 8000) typingDuration = 8000;
+    // Limits to prevent queue blocking forever, but long enough for realism
+    if (totalTypingTime < 1500) totalTypingTime = 1500;
+    if (totalTypingTime > 25000) totalTypingTime = 25000; // Cap at 25 seconds for extremely long texts
 
     try {
       await socket.presenceSubscribe(jid);
-      await delay(500); // Wait briefly before starting to type
-      await socket.sendPresenceUpdate('composing', jid);
+      await delay(500 + Math.floor(Math.random() * 1000)); // Wait 0.5s to 1.5s before starting to type
       
-      await delay(typingDuration); // The actual "typing" time
+      if (totalTypingTime <= 3000) {
+        // Small message, just type straight through
+        await socket.sendPresenceUpdate('composing', jid);
+        await delay(totalTypingTime);
+      } else {
+        // Longer message, break into chunks with natural pauses (thinking, correcting typos)
+        let remainingTime = totalTypingTime;
+        
+        while (remainingTime > 0) {
+          await socket.sendPresenceUpdate('composing', jid);
+          
+          // Type for a chunk of 2s to 6s, or whatever is left
+          const chunkTime = Math.min(remainingTime, Math.floor(Math.random() * 4000) + 2000);
+          await delay(chunkTime);
+          remainingTime -= chunkTime;
+          
+          if (remainingTime > 0) {
+            // Introduce a human pause
+            await socket.sendPresenceUpdate('paused', jid);
+            const pauseTime = Math.floor(Math.random() * 2000) + 500; // 0.5s to 2.5s pause
+            await delay(pauseTime);
+            
+            // 25% chance of a "correction" penalty (simulating backspacing/rewriting)
+            if (Math.random() < 0.25) {
+               // We don't send composing here, just delay to simulate time spent erasing
+               // Or we can send composing to simulate re-typing. We will send composing and add to remaining time?
+               // Actually, it's easier to just wait a bit longer to simulate the friction of correcting an error.
+               await delay(Math.floor(Math.random() * 1500) + 1000); // extra 1s to 2.5s
+            }
+          }
+        }
+      }
       
       await socket.sendPresenceUpdate('paused', jid);
-      await delay(300); // Brief pause before hitting send
+      await delay(Math.floor(Math.random() * 600) + 200); // Brief pause before hitting send (0.2s - 0.8s)
     } catch (err) {
       logger.error(`[Warmup] Failed to simulate typing presence for ${jid}:`, err);
     }

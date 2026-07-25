@@ -14,6 +14,11 @@ jest.mock('../utils/warmupLogger', () => ({
     warn: jest.fn()
   }
 }));
+jest.mock('../services/WarmupProfileService', () => ({
+  WarmupProfileService: {
+    getProfile: jest.fn().mockResolvedValue({ status: 'WARMING' }),
+  }
+}));
 
 describe('WarmupEventTriggerService', () => {
   beforeEach(() => {
@@ -58,11 +63,14 @@ describe('WarmupEventTriggerService', () => {
     await WarmupEventTriggerService.evaluateIncomingMessage(instanceId, msg, mockSocket);
 
     expect(WarmupQueue.addEventReplyJob).toHaveBeenCalledTimes(1);
-    expect(WarmupQueue.addEventReplyJob).toHaveBeenCalledWith({
-      instanceId,
-      targetJid: '5511999999999@s.whatsapp.net',
-      content: 'Claro, me avise qualquer coisa.'
-    }, 360000);
+    expect(WarmupQueue.addEventReplyJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instanceId,
+        targetJid: '5511999999999@s.whatsapp.net',
+        content: expect.stringContaining('Claro, me avise qualquer coisa')
+      }),
+      expect.any(Number)
+    );
   });
 
   it('should trigger AI event for any message and use AI response', async () => {

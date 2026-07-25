@@ -49,7 +49,7 @@ export class WarmupGroupReaderService {
    */
   static async readGroupMessage(_socket: WASocket, messageKey: proto.IMessageKey): Promise<void> {
     try {
-      await socket.readMessages([messageKey]);
+      await _socket.readMessages([messageKey]);
       warmupLogger.info(`[WarmupGroupReader] Successfully sent read receipt for group message ${messageKey.id}`);
     } catch (err) {
       warmupLogger.error(`[WarmupGroupReader] Failed to read group message ${messageKey.id}:`, err);

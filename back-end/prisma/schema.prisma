@@ -77,6 +77,8 @@ model WhatsAppInstance {
   userId    Int      @map("user_id")
   name      String   @default("Dispositivo WhatsApp")
   status    String   @default("DISCONNECTED")
+  userAgent String?  @map("user_agent")
+  proxyUrl  String?  @map("proxy_url")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

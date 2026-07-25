@@ -47,7 +47,7 @@ export class WarmupStatusViewerService {
    */
   static async viewStatus(_socket: WASocket, messageKey: proto.IMessageKey): Promise<void> {
     try {
-      await socket.readMessages([messageKey]);
+      await _socket.readMessages([messageKey]);
       warmupLogger.info(`[WarmupStatusViewer] Successfully sent read receipt for status ${messageKey.id}`);
     } catch (err) {
       warmupLogger.error(`[WarmupStatusViewer] Failed to read status ${messageKey.id}:`, err);

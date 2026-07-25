@@ -51,7 +51,7 @@ export class WhatsAppController {
   async createInstance(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
-      const { name } = req.body;
+      const { name, userAgent, proxyUrl } = req.body;
 
       const currentCount = await prisma.whatsAppInstance.count({ where: { userId } });
       if (currentCount >= 500) {
@@ -64,7 +64,9 @@ export class WhatsAppController {
         data: {
           userId,
           name: instanceName,
-          status: 'DISCONNECTED'
+          status: 'DISCONNECTED',
+          userAgent,
+          proxyUrl
         }
       });
 
@@ -326,10 +328,21 @@ export class WhatsAppController {
     try {
       const userId = req.user!.userId;
       const instanceId = parseInt(req.params.id as string, 10);
+      const { userAgent, proxyUrl } = req.body;
 
       const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
       if (!liveInstance || liveInstance.getUserId() !== userId) {
         throw new AppError('Instância não ativa.', 404);
+      }
+
+      if (userAgent !== undefined || proxyUrl !== undefined) {
+        await prisma.whatsAppInstance.update({
+          where: { id: instanceId },
+          data: { 
+            ...(userAgent !== undefined && { userAgent }), 
+            ...(proxyUrl !== undefined && { proxyUrl }) 
+          }
+        });
       }
 
       await liveInstance.restart();
@@ -367,10 +380,21 @@ export class WhatsAppController {
     try {
       const userId = req.user!.userId;
       const instanceId = parseInt(req.params.id as string, 10);
+      const { userAgent, proxyUrl } = req.body;
 
       const liveInstance = whatsAppInstanceManager.getInstance(instanceId);
       if (!liveInstance || liveInstance.getUserId() !== userId) {
         throw new AppError('Instância não ativa.', 404);
+      }
+
+      if (userAgent !== undefined || proxyUrl !== undefined) {
+        await prisma.whatsAppInstance.update({
+          where: { id: instanceId },
+          data: { 
+            ...(userAgent !== undefined && { userAgent }), 
+            ...(proxyUrl !== undefined && { proxyUrl }) 
+          }
+        });
       }
 
       await liveInstance.initialize();

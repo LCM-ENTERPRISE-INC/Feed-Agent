@@ -13,4 +13,8 @@ module.exports = {
     '!src/routes/**'
   ],
   coverageReporters: ['text', 'lcov', 'html'],
+  moduleNameMapper: {
+    '^@whiskeysockets/baileys$': '<rootDir>/src/__mocks__/@whiskeysockets/baileys.js',
+    '^https-proxy-agent$': '<rootDir>/src/__mocks__/https-proxy-agent.js',
+  }
 };

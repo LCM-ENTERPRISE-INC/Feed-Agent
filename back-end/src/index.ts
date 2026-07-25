@@ -16,6 +16,10 @@ import analyticsRoutes from './routes/analytics.routes';
 import whatsAppInstanceManager from './services/WhatsAppInstanceManager';
 import feedHistoryService from './services/FeedHistoryService';
 import { initCronJobs } from './crons/cleanupCron';
+import { WarmupQueue } from './Warm-up/queues/WarmupQueue';
+import { WarmupCronService } from './Warm-up/services/WarmupCronService';
+import warmupRoutes from './Warm-up/routes/warmup.routes';
+import { authMiddleware } from './middlewares/authMiddleware';
 
 // Initialize BullMQ Workers
 import './queues/ocrQueue';
@@ -82,6 +86,7 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/news', newsRoutes);
 app.use('/api/drafts', draftRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/warmup', authMiddleware, warmupRoutes);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Global Error Handler — MUST be the last middleware
@@ -109,6 +114,10 @@ async function startServer() {
 
       // Initialize Data Cleanup CRON jobs (Sprint 39)
       initCronJobs();
+
+      // Initialize Warm-up Workers & Crons
+      WarmupQueue.initWorker();
+      WarmupCronService.startBusinessHoursCron();
     });
   } catch (error: unknown) {
     const err = error as Error;

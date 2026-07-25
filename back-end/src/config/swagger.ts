@@ -28,7 +28,10 @@ const options: swaggerJsdoc.Options = {
       },
     },
   },
-  apis: [path.join(__dirname, '../routes/*.{ts,js}')], // Resuelve absoluto tanto em src/ quanto em dist/
+  apis: [
+    path.join(__dirname, '../routes/*.{ts,js}'),
+    path.join(__dirname, '../Warm-up/routes/*.{ts,js}')
+  ], // Resuelve absoluto tanto em src/ quanto em dist/
 };
 
 const swaggerSpec = swaggerJsdoc(options);

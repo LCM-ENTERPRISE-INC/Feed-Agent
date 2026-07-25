@@ -99,7 +99,7 @@ afterAll(async () => {
   
   // 2. Disconnect Databases
   await mongoose.disconnect();
-  await mongoServer.stop();
+  if (mongoServer) await mongoServer.stop();
   await prisma.$disconnect();
 });
 

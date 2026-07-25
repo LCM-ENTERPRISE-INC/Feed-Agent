@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90.47% </span>
+                <span class="strong">57.14% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>19/21</span>
+                <span class='fraction'>12/21</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">50% </span>
+                <span class="strong">25% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>2/4</span>
+                <span class='fraction'>1/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>3/3</span>
+                <span class='fraction'>0/3</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90.47% </span>
+                <span class="strong">57.14% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>19/21</span>
+                <span class='fraction'>12/21</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line high'></div>
+    <div class='status-line medium'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -152,25 +152,25 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -215,14 +215,14 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 // ─────────────────────────────────────────────────────────────────────────────
 &nbsp;
 const storage = multer.diskStorage({
-  destination: (_req: Request, _file: Express.Multer.File, cb) =&gt; {
-    cb(null, UPLOADS_DIR);
+  destination: <span class="fstat-no" title="function not covered" >(_</span>req: Request, _file: Express.Multer.File, cb) =&gt; {
+<span class="cstat-no" title="statement not covered" >    cb(null, UPLOADS_DIR);</span>
   },
-  filename: (_req: Request, file: Express.Multer.File, cb) =&gt; {
+  filename: <span class="fstat-no" title="function not covered" >(_</span>req: Request, file: Express.Multer.File, cb) =&gt; {
     // Generate a unique, safe filename: timestamp-random.ext
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+    const uniqueSuffix = <span class="cstat-no" title="statement not covered" >`${Date.now()}-${Math.round(Math.random() * 1e9)}`;</span>
+    const ext = <span class="cstat-no" title="statement not covered" >path.extname(file.originalname).toLowerCase();</span>
+<span class="cstat-no" title="statement not covered" >    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);</span>
   },
 });
 &nbsp;
@@ -230,12 +230,12 @@ const storage = multer.diskStorage({
 // File Filter &amp; Validation
 // ─────────────────────────────────────────────────────────────────────────────
 &nbsp;
-const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) =&gt; {
-  const allowedMimeTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+const fileFilter = <span class="fstat-no" title="function not covered" >(_</span>req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) =&gt; {
+  const allowedMimeTypes = <span class="cstat-no" title="statement not covered" >['image/jpeg', 'image/png', 'application/pdf'];</span>
   
-  if (allowedMimeTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else <span class="missing-if-branch" title="else path not taken" >E</span>{
+<span class="cstat-no" title="statement not covered" >  if (allowedMimeTypes.includes(file.mimetype)) {</span>
+<span class="cstat-no" title="statement not covered" >    cb(null, true);</span>
+  } else {
 <span class="cstat-no" title="statement not covered" >    cb(new AppError(`Invalid file type: ${file.mimetype}. Allowed types are: JPEG, PNG, PDF.`, 415) as any, false);</span>
   }
 };
@@ -262,7 +262,7 @@ export const uploadNewsSource = uploadMiddleware.single('file');
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-05-11T00:03:35.941Z
+                at 2026-07-23T20:21:37.363Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -9,6 +9,18 @@ jest.mock('../queues/WarmupQueue', () => ({
   }
 }));
 
+jest.mock('../services/WarmupPhaseManagerService', () => ({
+  WarmupPhaseManagerService: {
+    evaluateAllProfiles: jest.fn().mockResolvedValue(undefined),
+  }
+}));
+
+jest.mock('../services/WarmupCleanupService', () => ({
+  WarmupCleanupService: {
+    runDailyCleanup: jest.fn().mockResolvedValue(undefined),
+  }
+}));
+
 describe('WarmupBusinessHoursService', () => {
   it('should return true during business hours (10:00)', () => {
     const mockDate = new Date();

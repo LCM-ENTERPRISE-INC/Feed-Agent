@@ -44,6 +44,12 @@ jest.mock('../services/WarmupCacheService', () => ({
   }
 }));
 
+jest.mock('../services/WarmupProfileService', () => ({
+  WarmupProfileService: {
+    getProfile: jest.fn().mockResolvedValue({ status: 'WARMING' }),
+  }
+}));
+
 jest.mock('../../services/WhatsAppInstanceManager', () => ({
   __esModule: true,
   default: {
@@ -63,9 +69,10 @@ describe('WarmupQueue', () => {
   it('should add a message job to the queue', async () => {
     const jobData: WarmupMessageJob = {
       instanceId: '1',
-      targetJid: '551199999999@s.whatsapp.net',
+      targetJid: '123@s.whatsapp.net',
       messageType: 'text',
-      content: 'Hello'
+      type: 'message',
+      content: 'hello'
     };
 
     const job = await WarmupQueue.addMessageJob(jobData);

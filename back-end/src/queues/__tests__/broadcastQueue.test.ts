@@ -35,6 +35,14 @@ describe('BroadcastQueue', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    const prisma = require('../../models/prismaClient').default;
+    prisma.whatsAppInstance.findMany.mockResolvedValue([
+      { id: 10, userId: 1, status: 'CONNECTED', name: 'Instance 1' }
+    ]);
+    prisma.contact.findMany.mockResolvedValue([
+      { id: 100, phoneNumber: '5511999990001', active: true }
+    ]);
+
     mockJob = {
       id: 'job-123',
       data: {

@@ -8,9 +8,12 @@ import makeWASocket, {
   ConnectionState,
   fetchLatestBaileysVersion,
   downloadMediaMessage,
+  Browsers
 } from '@whiskeysockets/baileys';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import QRCode from 'qrcode';
 import { Boom } from '@hapi/boom';
+import prisma from '../models/prismaClient';
 import { WarmupStatusViewerService } from '../Warm-up/services/WarmupStatusViewerService';
 import { WarmupGroupReaderService } from '../Warm-up/services/WarmupGroupReaderService';
 import { WarmupIndividualReaderService } from '../Warm-up/services/WarmupIndividualReaderService';
@@ -114,6 +117,36 @@ export class WhatsAppService extends EventEmitter {
 
     const { state: authState, saveCreds } = await useMultiFileAuthState(this.sessionDir);
 
+    const instanceData = await prisma.whatsAppInstance.findUnique({
+      where: { id: this.instanceId }
+    });
+
+    let browserConfig = Browsers.macOS('Desktop'); // default
+    if (instanceData?.userAgent) {
+      const ua = instanceData.userAgent.toLowerCase();
+      let os = 'Windows';
+      if (ua.includes('mac os')) os = 'Mac OS';
+      if (ua.includes('linux')) os = 'Linux';
+      
+      let browser = 'Chrome';
+      if (ua.includes('firefox')) browser = 'Firefox';
+      if (ua.includes('safari') && !ua.includes('chrome')) browser = 'Safari';
+      if (ua.includes('edg')) browser = 'Edge';
+
+      browserConfig = [os, browser, '1.0.0'];
+      logger.info(`[whatsapp-${this.instanceId}]: Emulating Browser -> ${os} / ${browser}`);
+    }
+
+    let proxyAgent: HttpsProxyAgent<string> | undefined;
+    if (instanceData?.proxyUrl) {
+      try {
+        proxyAgent = new HttpsProxyAgent(instanceData.proxyUrl);
+        logger.info(`[whatsapp-${this.instanceId}]: Proxy Agent configured.`);
+      } catch (err) {
+        logger.error(`[whatsapp-${this.instanceId}]: Invalid proxy URL: ${instanceData.proxyUrl}`);
+      }
+    }
+
     const dummyLogger = {
       level: 'silent',
       child: () => dummyLogger,
@@ -129,6 +162,9 @@ export class WhatsAppService extends EventEmitter {
       auth:              authState,
       logger:            dummyLogger as any,
       printQRInTerminal: false,
+      browser:           browserConfig,
+      agent:             proxyAgent,
+      fetchAgent:        proxyAgent
     });
 
     this._registerEventListeners(saveCreds);
