@@ -9,6 +9,9 @@ import { showToast } from '@/utils/toastHelper';
 import apiClient from '@/services/apiClient';
 import { WhatsAppInstanceModal } from './WhatsAppInstanceModal';
 
+import { useMultiplexedSse } from '@/hooks/useMultiplexedSse';
+import type { SseEvent } from '@/hooks/useMultiplexedSse';
+
 interface WhatsAppInstance {
   id: number;
   name: string;
@@ -17,7 +20,133 @@ interface WhatsAppInstance {
     state: string;
     qrCode?: string;
   };
+  healthScore?: number;
 }
+
+const ConnectionCard: React.FC<{
+  instance: WhatsAppInstance;
+  onClick: () => void;
+}> = ({ instance, onClick }) => {
+  const [liveState, setLiveState] = useState(instance.liveStatus?.state || 'DISCONNECTED');
+  const [healthScore, setHealthScore] = useState(instance.healthScore ?? 100);
+
+  const handleSseEvent = (event: SseEvent) => {
+    switch (event.type) {
+      case 'connected':
+        setLiveState('OPEN');
+        break;
+      case 'disconnected':
+        {
+          const data = event.payload as { reason?: number } | null;
+          if (data?.reason === 403) setLiveState('BANNED');
+          else setLiveState('DISCONNECTED');
+        }
+        break;
+      case 'health':
+        {
+          const data = event.payload as { score?: number } | null;
+          if (data?.score !== undefined) {
+            setHealthScore(data.score);
+            if (data.score === 0) setLiveState('BANNED');
+          }
+        }
+        break;
+      case 'qr':
+        setLiveState('CONNECTING');
+        break;
+    }
+  };
+
+  useEffect(() => {
+    const handler = (e: any) => handleSseEvent(e.detail);
+    const eventName = `wa:sse:${instance.id}`;
+    window.addEventListener(eventName, handler);
+    return () => window.removeEventListener(eventName, handler);
+  }, [instance.id]);
+
+  const getStateDetails = (state: string) => {
+    const s = state?.toLowerCase() || 'disconnected';
+    if (s === 'open') return { label: 'Conectado', color: 'var(--success)' };
+    if (s === 'connecting') return { label: 'Conectando / QR', color: '#eab308' };
+    if (s === 'banned') return { label: 'Banido', color: 'var(--error)' };
+    return { label: 'Desconectado', color: 'var(--text-muted)' };
+  };
+
+  const details = getStateDetails(liveState);
+  const healthColor = healthScore > 79 ? 'var(--success)' : healthScore > 49 ? '#eab308' : 'var(--error)';
+
+  return (
+    <button
+      type="button"
+      className="glass-panel"
+      style={{
+        padding: 22,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+        borderLeft: `3px solid ${details.color}`,
+        cursor: 'pointer',
+        textAlign: 'left',
+        color: 'inherit',
+        font: 'inherit',
+        position: 'relative'
+      }}
+      onClick={onClick}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            backgroundColor: 'var(--primary-alpha)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: details.color,
+          }}
+        >
+          <Phone size={20} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{instance.name}</h3>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>ID {instance.id}</span>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '10px 12px',
+          backgroundColor: 'var(--surface)',
+          borderRadius: 8,
+          border: '1px solid var(--border)',
+        }}
+      >
+        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Status</span>
+        <span style={{ fontSize: '0.85rem', fontWeight: 650, color: details.color }}>{details.label}</span>
+      </div>
+
+      {/* Progress Bar de Saúde */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+          <span style={{ color: 'var(--text-muted)' }}>Saúde da Conta</span>
+          <span style={{ color: healthColor, fontWeight: 'bold' }}>{healthScore}%</span>
+        </div>
+        <div style={{ width: '100%', height: 6, backgroundColor: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+          <div style={{ width: `${healthScore}%`, height: '100%', backgroundColor: healthColor, transition: 'width 0.3s ease, background-color 0.3s ease' }} />
+        </div>
+        {liveState === 'BANNED' && (
+          <span style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: 4 }}>
+            ⚠️ Atenção: Esta conta foi bloqueada pelo WhatsApp.
+          </span>
+        )}
+      </div>
+    </button>
+  );
+};
 
 export const WhatsAppHub: React.FC = () => {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
@@ -25,14 +154,14 @@ export const WhatsAppHub: React.FC = () => {
   const [selectedInstance, setSelectedInstance] = useState<WhatsAppInstance | null>(null);
 
   const fetchInstances = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await apiClient.get('/whatsapp/instances');
-      if (res.data?.success) {
-        setInstances(res.data.data);
+      const response = await apiClient.get('/whatsapp/instances');
+      if (response.data?.success) {
+        setInstances(response.data.data);
       }
-    } catch (err) {
-      console.error('Falha ao obter instâncias:', err);
+    } catch (error) {
+      console.error('Falha ao obter instâncias:', error);
       showToast.error('Falha ao carregar instâncias do WhatsApp.');
     } finally {
       setLoading(false);
@@ -40,13 +169,13 @@ export const WhatsAppHub: React.FC = () => {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial + polling da API
-    void fetchInstances();
-    const interval = setInterval(() => {
-      void fetchInstances();
-    }, 10000);
-    return () => clearInterval(interval);
+    fetchInstances();
   }, []);
+
+  // Inicia o SSE Multiplexado global para a página
+  useMultiplexedSse((event) => {
+    window.dispatchEvent(new CustomEvent(`wa:sse:${event.instanceId}`, { detail: event }));
+  });
 
   const handleCreateInstance = async () => {
     try {
@@ -75,13 +204,7 @@ export const WhatsAppHub: React.FC = () => {
     }
   };
 
-  const getStateDetails = (state: string) => {
-    const s = state?.toLowerCase() || 'disconnected';
-    if (s === 'open') return { label: 'Conectado', color: 'var(--success)' };
-    if (s === 'connecting') return { label: 'Conectando / QR', color: '#eab308' };
-    if (s === 'banned') return { label: 'Banido', color: 'var(--error)' };
-    return { label: 'Desconectado', color: 'var(--text-muted)' };
-  };
+  // getStateDetails was moved to ConnectionCard
 
   return (
     <div className="page-stack">
@@ -119,68 +242,13 @@ export const WhatsAppHub: React.FC = () => {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-          {instances.map((instance) => {
-            const details = getStateDetails(instance.liveStatus?.state);
-            return (
-              <button
-                key={instance.id}
-                type="button"
-                className="glass-panel"
-                style={{
-                  padding: 22,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 14,
-                  borderLeft: `3px solid ${details.color}`,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  color: 'inherit',
-                  font: 'inherit',
-                }}
-                onClick={() => setSelectedInstance(instance)}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      backgroundColor: 'var(--primary-alpha)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: details.color,
-                    }}
-                  >
-                    <Phone size={20} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{instance.name}</h3>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>ID {instance.id}</span>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '10px 12px',
-                    backgroundColor: 'var(--surface)',
-                    borderRadius: 8,
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Status</span>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 650, color: details.color }}>{details.label}</span>
-                </div>
-
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Abrir: QR, teste e logout
-                </span>
-              </button>
-            );
-          })}
+          {instances.map((instance) => (
+            <ConnectionCard
+              key={instance.id}
+              instance={instance}
+              onClick={() => setSelectedInstance(instance)}
+            />
+          ))}
           {instances.length === 0 && !loading && (
             <div className="glass-panel" style={{ gridColumn: '1 / -1', padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
               Nenhuma instância ainda. Crie a primeira para escanear o QR.

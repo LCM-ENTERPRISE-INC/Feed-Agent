@@ -1,4 +1,4 @@
-import { WASocket } from '@whiskeysockets/baileys';
+import { Client } from 'whatsapp-web.js';
 import { warmupLogger } from '../utils/warmupLogger';
 import { WarmupProfileService } from './WarmupProfileService';
 import { WarmupSeedContactService } from './WarmupSeedContactService';
@@ -11,7 +11,8 @@ import { WarmupPersonaService } from './WarmupPersonaService';
 import { WarmupAIFilterService } from './WarmupAIFilterService';
 import { WarmupTypoService } from './WarmupTypoService';
 import { WarmupAuditService } from './WarmupAuditService';
-import { delay } from '@whiskeysockets/baileys';
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class WarmupSeedMessagingService {
   private static QUESTIONS = [
@@ -87,9 +88,9 @@ export class WarmupSeedMessagingService {
   }
 
   /**
-   * Executes the actual message sending via Baileys.
+   * Executes the actual message sending.
    */
-  static async executeSeedMessage(socket: WASocket, instanceId: string, seedPhone: string): Promise<void> {
+  static async executeSeedMessage(client: Client, instanceId: string, seedPhone: string): Promise<void> {
     try {
       warmupLogger.info(`[WarmupSeedMessaging] Executing seed message for instance ${instanceId} to ${seedPhone}...`);
       let messageToSend = '';
@@ -111,13 +112,13 @@ export class WarmupSeedMessagingService {
       const { text, correction } = WarmupTypoService.generateTypo(messageToSend);
       const shouldDelete = WarmupTypoService.shouldDelete();
 
-      const jid = toWhatsAppJid(seedPhone);
-      const sentKey = await WarmupBaileysService.sendWarmupMessage(socket, jid, text);
+      const jid = `${seedPhone}@c.us`;
+      const sentKey = await WarmupBaileysService.sendWarmupMessage(client, jid, text);
       
       if (shouldDelete && sentKey) {
         warmupLogger.info(`[WarmupSeedMessaging] Simulating regret! Deleting message for ${seedPhone}...`);
         await delay(Math.floor(Math.random() * 3000) + 2000); // Wait 2-5s
-        await WarmupBaileysService.deleteWarmupMessage(socket, jid, sentKey);
+        await WarmupBaileysService.deleteWarmupMessage(client, jid, sentKey);
         
         WarmupAuditService.logInteraction({
           instanceId,
@@ -149,7 +150,7 @@ export class WarmupSeedMessagingService {
       if (correction) {
         warmupLogger.info(`[WarmupSeedMessaging] Sending typo correction: "${correction}" for instance ${instanceId}`);
         await delay(Math.floor(Math.random() * 2000) + 1000); // 1-3s delay to realize the mistake
-        await WarmupBaileysService.sendWarmupMessage(socket, jid, correction);
+        await WarmupBaileysService.sendWarmupMessage(client, jid, correction);
         await WarmupCacheService.appendConversationHistory(instanceId, seedPhone, correction, 'me');
         
         WarmupAuditService.logInteraction({

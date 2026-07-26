@@ -1,4 +1,4 @@
-import { WASocket } from '@whiskeysockets/baileys';
+import { Client } from 'whatsapp-web.js';
 import { PrismaClient } from '@prisma/client';
 import { warmupLogger } from '../utils/warmupLogger';
 
@@ -16,12 +16,11 @@ export class WarmupBounceService {
    * Checks if a JID exists on WhatsApp. If it doesn't, removes it from the database
    * to avoid future attempts and throws HardBounceError.
    */
-  static async validateOrRemoveContact(socket: WASocket, jid: string): Promise<void> {
+  static async validateOrRemoveContact(client: Client, jid: string): Promise<void> {
     try {
-      const response = await socket.onWhatsApp(jid);
-      const result = response ? response[0] : null;
+      const isRegistered = await client.isRegisteredUser(jid);
       
-      if (!result || !result.exists) {
+      if (!isRegistered) {
         warmupLogger.warn(`[WarmupBounceService] Hard Bounce detected for ${jid}. Removing from database...`);
         
         const phone = jid.split('@')[0];

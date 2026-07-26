@@ -1,5 +1,5 @@
 import { Queue, Worker, Job } from 'bullmq';
-import { delay } from '@whiskeysockets/baileys';
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 import { warmupLogger } from '../utils/warmupLogger';
 import { WarmupBaileysService } from '../services/WarmupBaileysService';
 import { WarmupCacheService } from '../services/WarmupCacheService';
@@ -15,7 +15,6 @@ import { WarmupProfileService } from '../services/WarmupProfileService';
 import { WarmupAsymmetryService } from '../services/WarmupAsymmetryService';
 import { WarmupFallbackService } from '../services/WarmupFallbackService';
 import whatsAppInstanceManager from '../../services/WhatsAppInstanceManager';
-import { proto } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import IORedis from 'ioredis';
 
@@ -36,13 +35,13 @@ export interface WarmupMessageJob {
 export interface WarmupStatusJob {
   type: 'status_view';
   instanceId: string;
-  messageKey: proto.IMessageKey;
+  messageKey: any;
 }
 
 export interface WarmupGroupReadJob {
   type: 'group_read';
   instanceId: string;
-  messageKey: proto.IMessageKey;
+  messageKey: any;
 }
 
 export interface WarmupStatusPostJob {
@@ -59,7 +58,7 @@ export interface WarmupSeedMessageJob {
 export interface WarmupIndividualReadJob {
   type: 'individual_read';
   instanceId: string;
-  messageKey: proto.IMessageKey;
+  messageKey: any;
 }
 
 export interface WarmupEventReplyJob {
@@ -111,10 +110,10 @@ export class WarmupQueue {
         warmupLogger.info(`[WarmupQueue] Processing job ${job.id} for instance ${instanceId}`);
 
         const whatsappInstance = whatsAppInstanceManager.getInstance(parseInt(instanceId, 10));
-        const socket = whatsappInstance?.getSocket();
+        const client = whatsappInstance?.getClient();
 
-        if (!whatsappInstance || !socket) {
-          throw new Boom(`WhatsApp socket not connected for instance ${instanceId}`, { statusCode: 400 });
+        if (!whatsappInstance || !client) {
+          throw new Boom(`WhatsApp client not connected for instance ${instanceId}`, { statusCode: 400 });
         }
 
         // Check Rate Limits (Safety Net)
@@ -126,7 +125,7 @@ export class WarmupQueue {
         // Specific handling for status viewing
         if (job.data.type === 'status_view') {
           try {
-            await WarmupStatusViewerService.viewStatus(socket, job.data.messageKey);
+            await WarmupStatusViewerService.viewStatus(client, job.data.messageKey as any);
             warmupLogger.info(`[WarmupQueue] Successfully processed status view job ${job.id} for instance ${instanceId}`);
             return;
           } catch (error) {
@@ -138,7 +137,7 @@ export class WarmupQueue {
         // Specific handling for group reads
         if (job.data.type === 'group_read') {
           try {
-            await WarmupGroupReaderService.readGroupMessage(socket, job.data.messageKey);
+            await WarmupGroupReaderService.readGroupMessage(client, job.data.messageKey as any);
             warmupLogger.info(`[WarmupQueue] Successfully processed group read job ${job.id} for instance ${instanceId}`);
             return;
           } catch (error) {
@@ -150,7 +149,7 @@ export class WarmupQueue {
         // Specific handling for checking sent messages
         if (job.data.type === 'check_sent') {
           try {
-            await WarmupBaileysService.simulateCheckingSentMessage(socket, job.data.targetJid);
+            await WarmupBaileysService.simulateCheckingSentMessage(client, job.data.targetJid);
             warmupLogger.info(`[WarmupQueue] Successfully processed check_sent job ${job.id} for instance ${instanceId}`);
             return;
           } catch (error) {
@@ -162,7 +161,7 @@ export class WarmupQueue {
         // Specific handling for individual reads (Blue Ticks)
         if (job.data.type === 'individual_read') {
           try {
-            await WarmupBaileysService.simulateHumanRead(socket, job.data.messageKey.remoteJid!, job.data.messageKey);
+            await WarmupBaileysService.simulateHumanRead(client, job.data.messageKey.remoteJid!, job.data.messageKey as any);
             warmupLogger.info(`[WarmupQueue] Successfully processed individual read job ${job.id} for instance ${instanceId}`);
             return;
           } catch (error) {
@@ -175,13 +174,13 @@ export class WarmupQueue {
         if (job.data.type === 'event_reply') {
           try {
             // Utilizamos o sendWarmupMessage que já simula digitação natural
-            const sentKey = await WarmupBaileysService.sendWarmupMessage(socket, job.data.targetJid, job.data.content);
+            const sentKey = await WarmupBaileysService.sendWarmupMessage(client, job.data.targetJid, job.data.content);
             await WarmupCacheService.incrementMessagesSent(instanceId);
 
             if (job.data.shouldDelete && sentKey) {
               warmupLogger.info(`[WarmupQueue] Simulating regret! Deleting event reply for ${job.data.targetJid}...`);
               await delay(Math.floor(Math.random() * 3000) + 2000); // Wait 2-5s
-              await WarmupBaileysService.deleteWarmupMessage(socket, job.data.targetJid, sentKey);
+              await WarmupBaileysService.deleteWarmupMessage(client, job.data.targetJid, sentKey);
               
               WarmupAuditService.logInteraction({
                 instanceId,
@@ -213,7 +212,7 @@ export class WarmupQueue {
             if (job.data.correction) {
               warmupLogger.info(`[WarmupQueue] Sending typo correction for event reply...`);
               await delay(Math.floor(Math.random() * 2000) + 1000);
-              await WarmupBaileysService.sendWarmupMessage(socket, job.data.targetJid, job.data.correction);
+              await WarmupBaileysService.sendWarmupMessage(client, job.data.targetJid, job.data.correction);
               
               WarmupAuditService.logInteraction({
                 instanceId,
@@ -236,7 +235,7 @@ export class WarmupQueue {
         // Specific handling for status post
         if (job.data.type === 'status_post') {
           try {
-            await WarmupStatusPublisherService.executeStatusPost(socket, instanceId);
+            await WarmupStatusPublisherService.executeStatusPost(client, instanceId);
             warmupLogger.info(`[WarmupQueue] Successfully processed status post job ${job.id} for instance ${instanceId}`);
             return;
           } catch (error) {
@@ -265,12 +264,12 @@ export class WarmupQueue {
         // Specific handling for seed messages
         if (job.data.type === 'seed_message') {
           try {
-            await WarmupSeedMessagingService.executeSeedMessage(socket, instanceId, job.data.seedPhone);
+            await WarmupSeedMessagingService.executeSeedMessage(client, instanceId, job.data.seedPhone);
             await WarmupCacheService.incrementMessagesSent(instanceId);
             
             // Agendar verificação da mensagem enviada (50% de chance)
             if (Math.random() > 0.5) {
-               const targetJid = `${job.data.seedPhone}@s.whatsapp.net`;
+               const targetJid = `${job.data.seedPhone}@c.us`; // Use @c.us for whatsapp-web.js
                const checkDelay = Math.floor(Math.random() * 270000) + 30000;
                await WarmupQueue.addCheckSentJob({ instanceId, targetJid }, checkDelay);
             }
@@ -288,7 +287,7 @@ export class WarmupQueue {
             const { targetJid, messageType, content } = job.data;
             
             if (messageType === 'text') {
-              await WarmupBaileysService.sendWarmupMessage(socket, targetJid, content as string);
+              await WarmupBaileysService.sendWarmupMessage(client, targetJid, content as string);
               WarmupAuditService.logInteraction({
                 instanceId,
                 contactJid: targetJid,

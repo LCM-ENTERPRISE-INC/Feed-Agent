@@ -50,7 +50,7 @@ class WhatsAppController {
     async createInstance(req, res, next) {
         try {
             const userId = req.user.userId;
-            const { name } = req.body;
+            const { name, userAgent, proxyUrl } = req.body;
             const currentCount = await prismaClient_1.default.whatsAppInstance.count({ where: { userId } });
             if (currentCount >= 500) {
                 throw new AppError_1.AppError('Você atingiu o limite máximo de 500 conexões do WhatsApp.', 403);
@@ -60,7 +60,9 @@ class WhatsAppController {
                 data: {
                     userId,
                     name: instanceName,
-                    status: 'DISCONNECTED'
+                    status: 'DISCONNECTED',
+                    userAgent,
+                    proxyUrl
                 }
             });
             // Initialize the live instance
@@ -98,6 +100,74 @@ class WhatsAppController {
         }
     }
     /**
+     * GET /api/whatsapp/instances/stream
+     * Multiplexed Server-Sent Events (SSE) stream for ALL instances of a user.
+     * Solves the browser's 6 concurrent connections limit on HTTP/1.1.
+     */
+    streamAll(req, res) {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(400).end();
+            return;
+        }
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders();
+        logger_1.default.info(`[whatsapp-sse-all]: Multiplex client connected for user ${userId}`);
+        // Fetch all instances for this user
+        const userInstances = WhatsAppInstanceManager_1.default.getInstancesForUser(userId);
+        const pushEvent = (instanceId, event, data = null) => {
+            res.write(`event: ${event}\n`);
+            res.write(`data: ${JSON.stringify({ instanceId, ...data })}\n\n`);
+        };
+        // Keep track of bound listeners to clean up later
+        const listenersMap = new Map();
+        userInstances.forEach(liveInstance => {
+            const instanceId = liveInstance.getInstanceId();
+            // Send immediate state
+            const current = liveInstance.getStatus();
+            if (current.qrCode) {
+                pushEvent(instanceId, 'qr', { qrCode: current.qrCode });
+            }
+            else {
+                pushEvent(instanceId, current.state === 'open' ? 'connected' : 'disconnected', { state: current.state });
+            }
+            pushEvent(instanceId, 'health', { score: liveInstance.getHealthScore() });
+            // Define handlers
+            const onQr = (qrCode) => pushEvent(instanceId, 'qr', { qrCode });
+            const onOpen = () => pushEvent(instanceId, 'connected', null);
+            const onClose = (reason) => pushEvent(instanceId, 'disconnected', { reason: reason ?? null });
+            const onQrTimeout = () => pushEvent(instanceId, 'qr:timeout', null);
+            const onHealth = (score) => pushEvent(instanceId, 'health', { score });
+            liveInstance.on('wa:qr', onQr);
+            liveInstance.on('wa:open', onOpen);
+            liveInstance.on('wa:close', onClose);
+            liveInstance.on('wa:qr:timeout', onQrTimeout);
+            liveInstance.on('wa:health', onHealth);
+            listenersMap.set(instanceId, { onQr, onOpen, onClose, onQrTimeout, onHealth });
+        });
+        const heartbeat = setInterval(() => {
+            res.write(`event: heartbeat\ndata: {"ts":"${new Date().toISOString()}"}\n\n`);
+        }, 45000);
+        req.on('close', () => {
+            logger_1.default.info(`[whatsapp-sse-all]: Multiplex client disconnected for user ${userId}`);
+            clearInterval(heartbeat);
+            userInstances.forEach(liveInstance => {
+                const instanceId = liveInstance.getInstanceId();
+                const handlers = listenersMap.get(instanceId);
+                if (handlers) {
+                    liveInstance.off('wa:qr', handlers.onQr);
+                    liveInstance.off('wa:open', handlers.onOpen);
+                    liveInstance.off('wa:close', handlers.onClose);
+                    liveInstance.off('wa:qr:timeout', handlers.onQrTimeout);
+                    liveInstance.off('wa:health', handlers.onHealth);
+                }
+            });
+        });
+    }
+    /**
      * GET /api/whatsapp/instances/:id/stream
      * Opens a Server-Sent Events (SSE) stream for a specific instance.
      */
@@ -133,15 +203,18 @@ class WhatsAppController {
         else {
             pushEvent(current.state === 'open' ? 'connected' : 'disconnected', { state: current.state });
         }
+        pushEvent('health', { score: liveInstance.getHealthScore() });
         // ── Register event handlers ───────────────────────────────────────────
         const onQr = (qrCode) => pushEvent('qr', { qrCode });
         const onOpen = () => pushEvent('connected', null);
         const onClose = (reason) => pushEvent('disconnected', { reason: reason ?? null });
         const onQrTimeout = () => pushEvent('qr:timeout', null);
+        const onHealth = (score) => pushEvent('health', { score });
         liveInstance.on('wa:qr', onQr);
         liveInstance.on('wa:open', onOpen);
         liveInstance.on('wa:close', onClose);
         liveInstance.on('wa:qr:timeout', onQrTimeout);
+        liveInstance.on('wa:health', onHealth);
         // ── Heartbeat — keeps connection alive through proxies ────────────────
         const heartbeat = setInterval(() => {
             pushEvent('heartbeat', { ts: new Date().toISOString() });
@@ -154,6 +227,7 @@ class WhatsAppController {
             liveInstance.off('wa:open', onOpen);
             liveInstance.off('wa:close', onClose);
             liveInstance.off('wa:qr:timeout', onQrTimeout);
+            liveInstance.off('wa:health', onHealth);
         });
     }
     /**
@@ -285,9 +359,19 @@ class WhatsAppController {
         try {
             const userId = req.user.userId;
             const instanceId = parseInt(req.params.id, 10);
+            const { userAgent, proxyUrl } = req.body;
             const liveInstance = WhatsAppInstanceManager_1.default.getInstance(instanceId);
             if (!liveInstance || liveInstance.getUserId() !== userId) {
                 throw new AppError_1.AppError('Instância não ativa.', 404);
+            }
+            if (userAgent !== undefined || proxyUrl !== undefined) {
+                await prismaClient_1.default.whatsAppInstance.update({
+                    where: { id: instanceId },
+                    data: {
+                        ...(userAgent !== undefined && { userAgent }),
+                        ...(proxyUrl !== undefined && { proxyUrl })
+                    }
+                });
             }
             await liveInstance.restart();
             ApiResponse_1.ApiResponse.success(res, null, 'Sessão reiniciada.');
@@ -322,9 +406,19 @@ class WhatsAppController {
         try {
             const userId = req.user.userId;
             const instanceId = parseInt(req.params.id, 10);
+            const { userAgent, proxyUrl } = req.body;
             const liveInstance = WhatsAppInstanceManager_1.default.getInstance(instanceId);
             if (!liveInstance || liveInstance.getUserId() !== userId) {
                 throw new AppError_1.AppError('Instância não ativa.', 404);
+            }
+            if (userAgent !== undefined || proxyUrl !== undefined) {
+                await prismaClient_1.default.whatsAppInstance.update({
+                    where: { id: instanceId },
+                    data: {
+                        ...(userAgent !== undefined && { userAgent }),
+                        ...(proxyUrl !== undefined && { proxyUrl })
+                    }
+                });
             }
             await liveInstance.initialize();
             ApiResponse_1.ApiResponse.success(res, null, 'Reconectando ao WhatsApp...');

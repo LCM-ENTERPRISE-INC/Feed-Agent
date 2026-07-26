@@ -82,6 +82,23 @@ router.post('/instances', authMiddleware_1.authMiddleware, WhatsAppController_1.
 router.delete('/instances/:id', authMiddleware_1.authMiddleware, WhatsAppController_1.default.deleteInstance.bind(WhatsAppController_1.default));
 /**
  * @openapi
+ * /api/whatsapp/instances/stream:
+ *   get:
+ *     summary: Obter stream SSE de status/QR Code de TODAS as instâncias
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stream de Eventos (Server-Sent Events) multiplexado.
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ */
+router.get('/instances/stream', authMiddleware_1.authMiddleware, WhatsAppController_1.default.streamAll.bind(WhatsAppController_1.default));
+/**
+ * @openapi
  * /api/whatsapp/instances/{id}/stream:
  *   get:
  *     summary: Obter stream SSE de status/QR Code da instância

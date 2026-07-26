@@ -59,15 +59,15 @@ export class WarmupCrossTalkService {
           const targetService = whatsAppInstanceManager.getInstance(target.instanceId);
           if (!targetService) continue;
 
-          const targetSocket = targetService.getSocket();
-          const targetJidRaw = targetSocket?.user?.id;
+          const targetClient = targetService.getClient();
+          const targetJidRaw = targetClient?.info?.wid?.user;
           
           if (!targetJidRaw) {
              warmupLogger.warn(`[WarmupCrossTalkService] Could not retrieve JID for target instance ${target.instanceId}`);
              continue;
           }
 
-          const targetPhone = targetJidRaw.split(':')[0].split('@')[0];
+          const targetPhone = targetJidRaw;
 
           const intervalMs = Math.floor(windowMs / userProfiles.length);
           const slotStartMs = baseStartMs + (i * intervalMs);

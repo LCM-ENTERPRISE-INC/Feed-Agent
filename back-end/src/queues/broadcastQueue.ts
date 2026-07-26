@@ -82,11 +82,11 @@ export const broadcastProcessor = async (job: Job<BroadcastJobData>) => {
           status: 'pending'
         });
 
+        // 2. Select Instance via Round-Robin
+        const instanceToUse = userInstances[i % userInstances.length];
+        const instanceId = instanceToUse.getInstanceId();
+
         try {
-          // 2. Select Instance via Round-Robin
-          const instanceToUse = userInstances[i % userInstances.length];
-          const instanceId = instanceToUse.getInstanceId();
-          
           logger.info(`[broadcast-worker]: Routing message to contact ${contact.phoneNumber} via instance ${instanceId}`);
           
           // 3. Use the provided delayMs or fallback to a default 3.5s delay

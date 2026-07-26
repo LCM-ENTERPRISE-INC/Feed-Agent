@@ -60,6 +60,7 @@ export const useSseGateway = (instanceId: number, onEvent?: (event: SseEvent) =>
     eventSource.addEventListener('connected', handleEvent('connected'));
     eventSource.addEventListener('disconnected', handleEvent('disconnected'));
     eventSource.addEventListener('qr:timeout', handleEvent('qr:timeout'));
+    eventSource.addEventListener('health', handleEvent('health'));
     eventSource.addEventListener('heartbeat', () => { /* ignore heartbeat */ });
 
     eventSource.onerror = (err) => {

@@ -84,6 +84,24 @@ router.delete('/instances/:id', authMiddleware, whatsAppController.deleteInstanc
 
 /**
  * @openapi
+ * /api/whatsapp/instances/stream:
+ *   get:
+ *     summary: Obter stream SSE de status/QR Code de TODAS as instâncias
+ *     tags: [WhatsApp]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stream de Eventos (Server-Sent Events) multiplexado.
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ */
+router.get('/instances/stream', authMiddleware, whatsAppController.streamAll.bind(whatsAppController));
+
+/**
+ * @openapi
  * /api/whatsapp/instances/{id}/stream:
  *   get:
  *     summary: Obter stream SSE de status/QR Code da instância

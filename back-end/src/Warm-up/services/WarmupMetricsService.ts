@@ -40,9 +40,9 @@ export class WarmupMetricsService {
     // 2. Redis (Volatile data)
     const ephemeralState = await WarmupCacheService.getState(instanceIdStr);
 
-    // 3. Socket (Connection data)
+    // 3. Client (Connection data)
     const whatsappInstance = whatsAppInstanceManager.getInstance(instanceId);
-    const isConnected = whatsappInstance && whatsappInstance.getSocket() ? true : false;
+    const isConnected = whatsappInstance && whatsappInstance.getClient() ? true : false;
     
     // Calculate naive uptime hours based on when the profile was created
     const createdMs = new Date(profile.createdAt).getTime();

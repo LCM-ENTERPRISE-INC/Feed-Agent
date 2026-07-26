@@ -25,16 +25,24 @@ function parseCsvContacts(buffer) {
     if (lines.length < 2) {
         throw new Error('CSV file must contain a header row and at least one data row.');
     }
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    const nameIdx = headers.indexOf('name');
-    const phoneIdx = headers.indexOf('phonenumber');
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
+    const nameAliases = ['name', 'nome', 'contato', 'contact'];
+    const phoneAliases = ['phonenumber', 'telefone', 'phone', 'numero', 'celular'];
+    let nameIdx = -1;
+    let phoneIdx = -1;
+    for (let i = 0; i < headers.length; i++) {
+        if (nameAliases.includes(headers[i]))
+            nameIdx = i;
+        if (phoneAliases.includes(headers[i]))
+            phoneIdx = i;
+    }
     if (nameIdx === -1 || phoneIdx === -1) {
-        throw new Error('CSV must have "name" and "phoneNumber" columns. ' +
-            `Found headers: [${headers.join(', ')}]`);
+        throw new Error('O arquivo CSV precisa ter as colunas "Nome" e "Telefone" (ou equivalentes). ' +
+            `Cabeçalhos encontrados: [${headers.join(', ')}]`);
     }
     const results = [];
     for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim());
+        const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
         const name = cols[nameIdx] || '';
         const phoneNumber = cols[phoneIdx] || '';
         if (name && phoneNumber) {

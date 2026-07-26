@@ -31,7 +31,10 @@ const options = {
             },
         },
     },
-    apis: [path_1.default.join(__dirname, '../routes/*.{ts,js}')], // Resuelve absoluto tanto em src/ quanto em dist/
+    apis: [
+        path_1.default.join(__dirname, '../routes/*.{ts,js}'),
+        path_1.default.join(__dirname, '../Warm-up/routes/*.{ts,js}')
+    ], // Resuelve absoluto tanto em src/ quanto em dist/
 };
 const swaggerSpec = (0, swagger_jsdoc_1.default)(options);
 const setupSwagger = (app) => {

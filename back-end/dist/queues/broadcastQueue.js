@@ -8,9 +8,9 @@ const bullmq_1 = require("bullmq");
 const logger_1 = __importDefault(require("../utils/logger"));
 const redisClient_1 = __importDefault(require("../utils/redisClient"));
 const DraftService_1 = __importDefault(require("../services/DraftService"));
-const WhatsAppInstanceManager_1 = __importDefault(require("../services/WhatsAppInstanceManager"));
 const FeedHistoryService_1 = __importDefault(require("../services/FeedHistoryService"));
 const ContactService_1 = __importDefault(require("../services/ContactService"));
+const WarmupBroadcastIntegrationService_1 = require("../Warm-up/services/WarmupBroadcastIntegrationService");
 exports.BROADCAST_QUEUE_NAME = 'broadcast-processing-queue';
 exports.broadcastQueue = new bullmq_1.Queue(exports.BROADCAST_QUEUE_NAME, {
     connection: redisClient_1.default,
@@ -40,8 +40,8 @@ const broadcastProcessor = async (job) => {
             bodyText += '\n\n' + content.corpo.trim();
         }
         const messageText = `*${content.titulo || 'Notícia'}*\n\n${bodyText}\n\n_Fonte: ${content.fonte || 'Desconhecida'}_`;
-        // 3. Retrieve User's Connected WhatsApp Instances
-        const userInstances = WhatsAppInstanceManager_1.default.getInstancesForUser(userId).filter(inst => inst.getStatus().state === 'open');
+        // 3. Retrieve User's Connected WhatsApp Instances (Filtered by Warm-up Status)
+        const userInstances = await WarmupBroadcastIntegrationService_1.WarmupBroadcastIntegrationService.getEligibleInstancesForBroadcast(userId);
         if (userInstances.length === 0) {
             throw new Error(`No connected WhatsApp instances found for user ${userId}. Cannot broadcast.`);
         }
@@ -65,10 +65,10 @@ const broadcastProcessor = async (job) => {
                 messageContent: messageText,
                 status: 'pending'
             });
+            // 2. Select Instance via Round-Robin
+            const instanceToUse = userInstances[i % userInstances.length];
+            const instanceId = instanceToUse.getInstanceId();
             try {
-                // 2. Select Instance via Round-Robin
-                const instanceToUse = userInstances[i % userInstances.length];
-                const instanceId = instanceToUse.getInstanceId();
                 logger_1.default.info(`[broadcast-worker]: Routing message to contact ${contact.phoneNumber} via instance ${instanceId}`);
                 // 3. Use the provided delayMs or fallback to a default 3.5s delay
                 const delayMs = job.data.delayMs || 3500;
@@ -76,6 +76,19 @@ const broadcastProcessor = async (job) => {
                 // 4. Mark as sent and associate messageId
                 await FeedHistoryService_1.default.updateMessageStatus(String(logRecord._id), 'sent', undefined, messageId);
                 successCount++;
+                // 5. Simular comportamento orgânico: chance de checar a leitura da mensagem minutos depois
+                if (Math.random() > 0.5) {
+                    try {
+                        const { WarmupQueue } = require('../Warm-up/queues/WarmupQueue');
+                        const { sanitizePhoneNumber, toWhatsAppJid } = require('../utils/phoneUtils');
+                        const checkDelay = Math.floor(Math.random() * 270000) + 30000;
+                        const targetJid = toWhatsAppJid(sanitizePhoneNumber(contact.phoneNumber));
+                        await WarmupQueue.addCheckSentJob({ instanceId: String(instanceId), targetJid }, checkDelay);
+                    }
+                    catch (e) {
+                        logger_1.default.warn(`[broadcast-worker]: Could not schedule check_sent job for ${contact.phoneNumber}`);
+                    }
+                }
             }
             catch (error) {
                 const err = error;
@@ -94,6 +107,7 @@ const broadcastProcessor = async (job) => {
                         logger_1.default.error(`[broadcast-worker]: Failed to deactivate contact ${contact.id}: ${dbErr.message}`);
                     }
                     await FeedHistoryService_1.default.updateMessageStatus(String(logRecord._id), 'failed', 'invalid_number');
+                    await instanceToUse.deductHealth(5); // Penalidade leve por número inválido
                 }
                 else {
                     // 3. Mark as failed normally
@@ -112,10 +126,12 @@ const broadcastProcessor = async (job) => {
                     err.message?.toLowerCase().includes('disconnect');
                 if (isRateLimited) {
                     logger_1.default.warn(`[broadcast-worker]: Temporary block detected. Pausing worker for 60 seconds...`);
+                    await instanceToUse.deductHealth(30); // Penalidade pesada por rate limit
                     await new Promise(res => setTimeout(res, 60000));
                 }
                 else if (isTimeoutOrNetworkError) {
                     logger_1.default.error(`[broadcast-worker]: Network timeout. Re-queuing remaining ${contacts.length - i} contacts.`);
+                    await instanceToUse.deductHealth(2); // Penalidade mínima por instabilidade
                     // Update job data to only include remaining contacts
                     await job.updateData({
                         ...job.data,
@@ -126,6 +142,9 @@ const broadcastProcessor = async (job) => {
                 }
                 else {
                     // Not a timeout, just a regular error (like rate limit that was paused, or something else)
+                    if (!isInvalidNumber) {
+                        await instanceToUse.deductHealth(10);
+                    }
                     logger_1.default.error(`[broadcast-worker]: Unhandled error for contact ${contact.phoneNumber}: ${err.message}. Skipping to next contact.`);
                 }
             }

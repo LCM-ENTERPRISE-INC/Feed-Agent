@@ -66,11 +66,11 @@ export class WarmupProfileController {
 
       const instance = whatsAppInstanceManager.getInstance(parseInt(instanceId, 10));
       
-      if (!instance || !instance.getSocket()) {
-        throw new Boom('WhatsApp socket not connected', { statusCode: 400 });
+      if (!instance || !instance.getClient()) {
+        throw new Boom('WhatsApp client not connected', { statusCode: 400 });
       }
 
-      await WarmupBaileysService.updateProfilePicture(instance.getSocket()!, req.file.buffer);
+      await WarmupBaileysService.updateProfilePicture(instance.getClient()!, req.file.buffer);
 
       // Auditing
       await WarmupProfileService.updateStatus(instanceId, WarmupStatus.PAUSED, 'Profile picture updated (Auto-Pause)');
@@ -92,11 +92,11 @@ export class WarmupProfileController {
 
       const instance = whatsAppInstanceManager.getInstance(parseInt(instanceId, 10));
       
-      if (!instance || !instance.getSocket()) {
-        throw new Boom('WhatsApp socket not connected', { statusCode: 400 });
+      if (!instance || !instance.getClient()) {
+        throw new Boom('WhatsApp client not connected', { statusCode: 400 });
       }
 
-      await WarmupBaileysService.updateProfileStatus(instance.getSocket()!, text);
+      await WarmupBaileysService.updateProfileStatus(instance.getClient()!, text);
 
       // Auditing
       await WarmupProfileService.updateStatus(instanceId, WarmupStatus.PAUSED, 'About status updated (Auto-Pause)');
@@ -107,5 +107,3 @@ export class WarmupProfileController {
     }
   }
 }
-
-

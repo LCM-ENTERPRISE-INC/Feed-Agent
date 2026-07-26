@@ -111,6 +111,86 @@ export class WhatsAppController {
   }
 
   /**
+   * GET /api/whatsapp/instances/stream
+   * Multiplexed Server-Sent Events (SSE) stream for ALL instances of a user.
+   * Solves the browser's 6 concurrent connections limit on HTTP/1.1.
+   */
+  streamAll(req: Request, res: Response): void {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(400).end();
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    logger.info(`[whatsapp-sse-all]: Multiplex client connected for user ${userId}`);
+
+    // Fetch all instances for this user
+    const userInstances = whatsAppInstanceManager.getInstancesForUser(userId);
+
+    const pushEvent = (instanceId: number, event: string, data: object | null = null): void => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify({ instanceId, ...data })}\n\n`);
+    };
+
+    // Keep track of bound listeners to clean up later
+    const listenersMap = new Map<number, any>();
+
+    userInstances.forEach(liveInstance => {
+      const instanceId = liveInstance.getInstanceId();
+      
+      // Send immediate state
+      const current = liveInstance.getStatus();
+      if (current.qrCode) {
+        pushEvent(instanceId, 'qr', { qrCode: current.qrCode });
+      } else {
+        pushEvent(instanceId, current.state === 'open' ? 'connected' : 'disconnected', { state: current.state });
+      }
+      pushEvent(instanceId, 'health', { score: liveInstance.getHealthScore() });
+
+      // Define handlers
+      const onQr         = (qrCode: string)  => pushEvent(instanceId, 'qr', { qrCode });
+      const onOpen       = ()                => pushEvent(instanceId, 'connected', null);
+      const onClose      = (reason?: number) => pushEvent(instanceId, 'disconnected', { reason: reason ?? null });
+      const onQrTimeout  = ()                => pushEvent(instanceId, 'qr:timeout', null);
+      const onHealth     = (score: number)   => pushEvent(instanceId, 'health', { score });
+
+      liveInstance.on('wa:qr',         onQr);
+      liveInstance.on('wa:open',       onOpen);
+      liveInstance.on('wa:close',      onClose);
+      liveInstance.on('wa:qr:timeout', onQrTimeout);
+      liveInstance.on('wa:health',     onHealth);
+
+      listenersMap.set(instanceId, { onQr, onOpen, onClose, onQrTimeout, onHealth });
+    });
+
+    const heartbeat = setInterval(() => {
+      res.write(`event: heartbeat\ndata: {"ts":"${new Date().toISOString()}"}\n\n`);
+    }, 45000);
+
+    req.on('close', () => {
+      logger.info(`[whatsapp-sse-all]: Multiplex client disconnected for user ${userId}`);
+      clearInterval(heartbeat);
+      userInstances.forEach(liveInstance => {
+        const instanceId = liveInstance.getInstanceId();
+        const handlers = listenersMap.get(instanceId);
+        if (handlers) {
+          liveInstance.off('wa:qr', handlers.onQr);
+          liveInstance.off('wa:open', handlers.onOpen);
+          liveInstance.off('wa:close', handlers.onClose);
+          liveInstance.off('wa:qr:timeout', handlers.onQrTimeout);
+          liveInstance.off('wa:health', handlers.onHealth);
+        }
+      });
+    });
+  }
+
+  /**
    * GET /api/whatsapp/instances/:id/stream
    * Opens a Server-Sent Events (SSE) stream for a specific instance.
    */

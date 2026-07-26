@@ -21,6 +21,10 @@ const draft_routes_1 = __importDefault(require("./routes/draft.routes"));
 const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"));
 const WhatsAppInstanceManager_1 = __importDefault(require("./services/WhatsAppInstanceManager"));
 const cleanupCron_1 = require("./crons/cleanupCron");
+const WarmupQueue_1 = require("./Warm-up/queues/WarmupQueue");
+const WarmupCronService_1 = require("./Warm-up/services/WarmupCronService");
+const warmup_routes_1 = __importDefault(require("./Warm-up/routes/warmup.routes"));
+const authMiddleware_1 = require("./middlewares/authMiddleware");
 // Initialize BullMQ Workers
 require("./queues/ocrQueue");
 require("./queues/broadcastQueue");
@@ -75,6 +79,7 @@ app.use('/api/whatsapp', whatsapp_routes_1.default);
 app.use('/api/news', news_routes_1.default);
 app.use('/api/drafts', draft_routes_1.default);
 app.use('/api/analytics', analytics_routes_1.default);
+app.use('/api/warmup', authMiddleware_1.authMiddleware, warmup_routes_1.default);
 // ─────────────────────────────────────────────────────────────────────────────
 // Global Error Handler — MUST be the last middleware
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,6 +101,9 @@ async function startServer() {
             });
             // Initialize Data Cleanup CRON jobs (Sprint 39)
             (0, cleanupCron_1.initCronJobs)();
+            // Initialize Warm-up Workers & Crons
+            WarmupQueue_1.WarmupQueue.initWorker();
+            WarmupCronService_1.WarmupCronService.startBusinessHoursCron();
         });
     }
     catch (error) {

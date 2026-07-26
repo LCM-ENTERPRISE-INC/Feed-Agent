@@ -1,4 +1,4 @@
-import { WASocket } from '@whiskeysockets/baileys';
+import { Client, MessageMedia } from 'whatsapp-web.js';
 import { warmupLogger } from '../utils/warmupLogger';
 import { WarmupProfileService } from './WarmupProfileService';
 import { WarmupQueue } from '../queues/WarmupQueue';
@@ -41,9 +41,9 @@ export class WarmupStatusPublisherService {
   }
 
   /**
-   * Executes the actual post via Baileys.
+   * Executes the actual post.
    */
-  static async executeStatusPost(socket: WASocket, instanceId: string): Promise<void> {
+  static async executeStatusPost(client: Client, instanceId: string): Promise<void> {
     try {
       warmupLogger.info(`[WarmupStatusPublisher] Executing daily status post for instance ${instanceId}...`);
       
@@ -52,12 +52,12 @@ export class WarmupStatusPublisherService {
       const imageUrl = `https://picsum.photos/seed/${instanceId}-${Date.now()}/800/600`;
       
       const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-      const buffer = Buffer.from(response.data, 'binary');
+      const base64Image = Buffer.from(response.data, 'binary').toString('base64');
+      const media = new MessageMedia('image/jpeg', base64Image, 'status.jpg');
 
       const randomCaption = this.CAPTIONS[Math.floor(Math.random() * this.CAPTIONS.length)];
 
-      await socket.sendMessage('status@broadcast', {
-        image: buffer,
+      await client.sendMessage('status@broadcast', media, {
         caption: randomCaption
       });
 

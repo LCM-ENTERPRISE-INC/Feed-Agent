@@ -1,4 +1,4 @@
-import { WASocket, proto } from '@whiskeysockets/baileys';
+import { Client, Message } from 'whatsapp-web.js';
 import { warmupLogger } from '../utils/warmupLogger';
 import { WarmupQueue } from '../queues/WarmupQueue';
 import LlamaService from '../../services/LlamaService';
@@ -16,16 +16,17 @@ export class WarmupEventTriggerService {
   /**
    * Avalia a mensagem recebida e decide se deve acionar um gatilho de resposta (ex: emoji '👍').
    */
-  static async evaluateIncomingMessage(instanceId: string, msg: proto.IWebMessageInfo, _socket: WASocket): Promise<void> {
+  static async evaluateIncomingMessage(instanceId: string, msg: Message, _client: Client): Promise<void> {
     try {
-      if (!msg.key || !msg.key.remoteJid) return;
+      if (!msg.id || !msg.from) return;
 
-      const { remoteJid, fromMe } = msg.key;
+      const remoteJid = msg.from;
+      const fromMe = msg.fromMe;
       
       if (fromMe) return; // Não responde a si mesmo
       if (remoteJid === 'status@broadcast' || remoteJid.endsWith('@g.us')) return;
 
-      const text = this.extractMessageText(msg);
+      const text = msg.body;
       if (!text || text.length < 2) return;
 
       // Drop rate de 20% para evitar loops infinitos entre bots
@@ -36,7 +37,7 @@ export class WarmupEventTriggerService {
 
       warmupLogger.info(`[WarmupEventTrigger] Received text from ${remoteJid} on instance ${instanceId}. Evaluating with AI...`);
 
-      // Extract phone number from JID (e.g. 5511999999999@s.whatsapp.net)
+      // Extract phone number from JID (e.g. 5511999999999@c.us)
       const contactPhone = remoteJid.split('@')[0];
 
       // Auditoria: Gravamos a recepção da mensagem organicamente no MongoDB
@@ -104,13 +105,5 @@ export class WarmupEventTriggerService {
     } catch (error) {
       warmupLogger.error(`[WarmupEventTrigger] Error evaluating incoming message for instance ${instanceId}:`, error);
     }
-  }
-
-  /**
-   * Extrai o texto limpo da mensagem Baileys.
-   */
-  private static extractMessageText(msg: proto.IWebMessageInfo): string | null {
-    if (!msg.message) return null;
-    return msg.message.conversation || msg.message.extendedTextMessage?.text || null;
   }
 }

@@ -1,16 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import { EventEmitter } from 'events';
-import makeWASocket, {
-  DisconnectReason,
-  useMultiFileAuthState,
-  WASocket,
-  ConnectionState,
-  fetchLatestBaileysVersion,
-  downloadMediaMessage,
-  Browsers
-} from '@whiskeysockets/baileys';
-import { HttpsProxyAgent } from 'https-proxy-agent';
+import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import QRCode from 'qrcode';
 import { Boom } from '@hapi/boom';
 import prisma from '../models/prismaClient';
@@ -19,28 +10,16 @@ import { WarmupGroupReaderService } from '../Warm-up/services/WarmupGroupReaderS
 import { WarmupIndividualReaderService } from '../Warm-up/services/WarmupIndividualReaderService';
 import logger from '../utils/logger';
 import { WaConnectionState, WaStatus } from '../types/whatsapp.types';
-import { sanitizePhoneNumber, toWhatsAppJid } from '../utils/phoneUtils';
-import { delay } from '@whiskeysockets/baileys';
+import { sanitizePhoneNumber } from '../utils/phoneUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
-
-const QR_TIMEOUT_MS  = 60_000; // 60 seconds before a new QR cycle is triggered
+const QR_TIMEOUT_MS  = 60_000;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Event Map
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Internal event bus contract for WhatsAppService.
- *
- * Events:
- *  - `wa:qr`           — emitted whenever a new QR Code is ready (payload: Base64 PNG string)
- *  - `wa:open`         — emitted when the connection is fully established
- *  - `wa:close`        — emitted when the connection drops (payload: reason code | undefined)
- *  - `wa:qr:timeout`   — emitted when the QR Code expires without being scanned
- */
 export declare interface WhatsAppService {
   emit(event: 'wa:qr',         qrBase64: string):    boolean;
   emit(event: 'wa:open'):                            boolean;
@@ -59,40 +38,24 @@ export declare interface WhatsAppService {
   on(event: 'wa:message',    listener: (payload: { instanceId: number, messageId: string, fromNumber: string, text: string, timestamp: number, mediaUrl?: string, mediaType?: string }) => void): this;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WhatsAppService — Singleton
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Manages the lifecycle of a single Baileys WebSocket connection.
- * Extends EventEmitter to broadcast connection events to SSE listeners.
- *
- * Usage:
- *   await whatsAppService.initialize();
- *   whatsAppService.on('wa:qr', (qrBase64) => { ... });
- */
 export class WhatsAppService extends EventEmitter {
-  private socket:        WASocket | null = null;
-  private qrTimeoutRef:  ReturnType<typeof setTimeout> | null = null;
+  private client: Client | null = null;
+  private qrTimeoutRef: ReturnType<typeof setTimeout> | null = null;
   private reconnectTimeoutRef: ReturnType<typeof setTimeout> | null = null;
-  private isManualOperation: boolean = false; // Prevents auto-reconnect during manual restart/logout
-  private status:        WaStatus = {
-    state:       WaConnectionState.CLOSE,
+  private isManualOperation: boolean = false;
+  private status: WaStatus = {
+    state: WaConnectionState.CLOSE,
     lastUpdated: new Date(),
   };
 
   private healthScore: number = 100;
-
   private instanceId: number;
   private userId: number;
-  private sessionDir: string;
 
   constructor(instanceId: number, userId: number) {
     super();
     this.instanceId = instanceId;
     this.userId = userId;
-    this.sessionDir = path.resolve(process.cwd(), `sessions/instance_${instanceId}`);
-    // Avoid Node.js MaxListenersExceededWarning for many SSE clients
     this.setMaxListeners(50);
   }
 
@@ -104,229 +67,158 @@ export class WhatsAppService extends EventEmitter {
     return this.userId;
   }
 
-  // ─── Public API ───────────────────────────────────────────────────────────
-
-  /**
-   * Initializes (or re-initializes) the Baileys WebSocket connection.
-   * Loads existing session from disk. If no session exists, a QR Code is
-   * generated, emitted via `wa:qr` event, and available in `getStatus()`.
-   */
   async initialize(): Promise<void> {
-    if (!fs.existsSync(this.sessionDir)) {
-      fs.mkdirSync(this.sessionDir, { recursive: true });
-    }
-
-    const { version } = await fetchLatestBaileysVersion();
-    logger.info(`[whatsapp-${this.instanceId}]: Using Baileys v${version.join('.')}`);
-
-    const { state: authState, saveCreds } = await useMultiFileAuthState(this.sessionDir);
-
     const instanceData = await prisma.whatsAppInstance.findUnique({
       where: { id: this.instanceId }
     });
-
-    let browserConfig = Browsers.macOS('Desktop'); // default
-    if (instanceData?.userAgent) {
-      const ua = instanceData.userAgent.toLowerCase();
-      let os = 'Windows';
-      if (ua.includes('mac os')) os = 'Mac OS';
-      if (ua.includes('linux')) os = 'Linux';
-      
-      let browser = 'Chrome';
-      if (ua.includes('firefox')) browser = 'Firefox';
-      if (ua.includes('safari') && !ua.includes('chrome')) browser = 'Safari';
-      if (ua.includes('edg')) browser = 'Edge';
-
-      browserConfig = [os, browser, '1.0.0'];
-      logger.info(`[whatsapp-${this.instanceId}]: Emulating Browser -> ${os} / ${browser}`);
-    }
 
     if (instanceData?.healthScore !== undefined) {
       this.healthScore = instanceData.healthScore;
     }
 
-    let proxyAgent: HttpsProxyAgent<string> | undefined;
+    const puppeteerArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu'
+    ];
+
+    let proxyUrlObj: URL | null = null;
     if (instanceData?.proxyUrl) {
       try {
-        proxyAgent = new HttpsProxyAgent(instanceData.proxyUrl);
+        proxyUrlObj = new URL(instanceData.proxyUrl);
+        puppeteerArgs.push(`--proxy-server=${proxyUrlObj.protocol}//${proxyUrlObj.hostname}:${proxyUrlObj.port}`);
         logger.info(`[whatsapp-${this.instanceId}]: Proxy Agent configured.`);
       } catch (err) {
         logger.error(`[whatsapp-${this.instanceId}]: Invalid proxy URL: ${instanceData.proxyUrl}`);
       }
     }
 
-    const dummyLogger = {
-      level: 'silent',
-      child: () => dummyLogger,
-      info: () => {},
-      debug: () => {},
-      warn: () => {},
-      error: () => {},
-      trace: () => {},
-    };
-
-    this.socket = makeWASocket({
-      version,
-      auth:              authState,
-      logger:            dummyLogger as any,
-      printQRInTerminal: false,
-      browser:           browserConfig,
-      agent:             proxyAgent,
-      fetchAgent:        proxyAgent
+    this.client = new Client({
+      authStrategy: new LocalAuth({
+        clientId: `instance_${this.instanceId}`,
+        dataPath: path.resolve(process.cwd(), 'sessions')
+      }),
+      puppeteer: {
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        headless: true,
+        args: puppeteerArgs
+      }
     });
 
-    this._registerEventListeners(saveCreds);
-    logger.info('[whatsapp]: WhatsApp socket initialized.');
+    this._registerEventListeners();
+
+    logger.info(`[whatsapp-${this.instanceId}]: Initializing whatsapp-web.js client...`);
+    
+    try {
+      await this.client.initialize();
+      // Handle proxy auth if needed
+      if (proxyUrlObj && proxyUrlObj.username && proxyUrlObj.password && this.client.pupPage) {
+        await this.client.pupPage.authenticate({
+          username: proxyUrlObj.username,
+          password: proxyUrlObj.password
+        });
+      }
+    } catch (e) {
+      logger.error(`[whatsapp-${this.instanceId}]: Failed to initialize client: ${e}`);
+    }
   }
 
-  /**
-   * Returns an immutable snapshot of the current connection status.
-   * `status.qrCode` is populated only while awaiting a QR scan.
-   */
   getStatus(): WaStatus {
     return { ...this.status };
   }
 
-  /**
-   * Returns the raw Baileys socket, or null if not initialized.
-   * Used by message-sending methods in Sprint 15.
-   */
-  getSocket(): WASocket | null {
-    return this.socket;
+  getClient(): Client | null {
+    return this.client;
   }
 
-  /**
-   * Sends a text message to a specific phone number.
-   * Handles sanitization, JID formatting, artificial delays, and simulated typing.
-   *
-   * @param phoneNumber - The recipient's raw or sanitized phone number.
-   * @param text        - The text message content to send.
-   * @param delayMs     - Optional artificial delay before sending (default: 1500ms).
-   */
   async sendMessage(phoneNumber: string, text: string, delayMs = 1500, imagePath?: string): Promise<string> {
-    if (!this.socket || this.status.state !== WaConnectionState.OPEN) {
+    if (!this.client || this.status.state !== WaConnectionState.OPEN) {
       throw new Boom('WhatsApp is not connected.', { statusCode: 503 });
     }
 
-    // 1. Sanitize and format the number to Baileys JID format
     const sanitized = sanitizePhoneNumber(phoneNumber);
-    let jid = toWhatsAppJid(sanitized);
+    let jid = sanitized.includes('@c.us') ? sanitized : `${sanitized}@c.us`;
 
-    // 1.5. Resolve the actual registered JID on WhatsApp (fixes Brazilian 9th digit issue)
     try {
-      const results = await this.socket.onWhatsApp(sanitized);
-      if (results && results.length > 0) {
-        const result = results[0];
-        if (result.exists) {
-          jid = result.jid;
-        }
+      const isRegistered = await this.client.isRegisteredUser(jid);
+      if (!isRegistered) {
+        logger.warn(`[whatsapp-${this.instanceId}]: Number ${jid} is not registered on WhatsApp.`);
       }
-    } catch (err) {
-      logger.warn(`[whatsapp]: Could not resolve onWhatsApp for ${sanitized}: ${err}`);
-    }
+    } catch (e) {}
 
-    // 2. Simulate typing presence to make it feel human using Warmup Heuristics
-    const { WarmupBaileysService } = require('../Warm-up/services/WarmupBaileysService');
-    await WarmupBaileysService.simulateHumanTyping(this.socket, jid, text.length);
-
-    // 3. Optional extra pacing delay (from queue)
-    if (delayMs > 0) {
-      await delay(delayMs);
-    }
-
+    const chat = await this.client.getChatById(jid);
+    await chat.sendStateTyping();
     
+    if (delayMs > 0) {
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+    await chat.clearState();
+
     let sentMsg;
     if (imagePath && fs.existsSync(imagePath)) {
-      sentMsg = await this.socket.sendMessage(jid, { 
-        image: fs.readFileSync(imagePath), 
-        caption: text 
-      });
+      const media = MessageMedia.fromFilePath(imagePath);
+      sentMsg = await this.client.sendMessage(jid, media, { caption: text });
     } else {
-      sentMsg = await this.socket.sendMessage(jid, { text });
+      sentMsg = await this.client.sendMessage(jid, text);
     }
 
     logger.info(`[whatsapp]: Message sent successfully to ${jid}`);
-    return sentMsg?.key?.id || '';
+    return sentMsg.id.id || '';
   }
 
-  /**
-   * Sends a media file to a specific phone number.
-   */
   async sendMedia(phoneNumber: string, mediaPath: string, mimeType: string, caption = '', originalName = ''): Promise<string> {
-    if (!this.socket || this.status.state !== WaConnectionState.OPEN) {
+    if (!this.client || this.status.state !== WaConnectionState.OPEN) {
       throw new Boom('WhatsApp is not connected.', { statusCode: 503 });
     }
 
     const sanitized = sanitizePhoneNumber(phoneNumber);
-    let jid = toWhatsAppJid(sanitized);
+    let jid = sanitized.includes('@c.us') ? sanitized : `${sanitized}@c.us`;
 
-    try {
-      const results = await this.socket.onWhatsApp(sanitized);
-      if (results && results.length > 0) {
-        if (results[0].exists) jid = results[0].jid;
-      }
-    } catch (err) {}
+    const chat = await this.client.getChatById(jid);
+    await chat.sendStateTyping();
+    await new Promise(r => setTimeout(r, 1500));
+    await chat.clearState();
 
-    await this.socket.presenceSubscribe(jid);
-    await delay(500);
-    await this.socket.sendPresenceUpdate('composing', jid);
-    await delay(1000);
-    await this.socket.sendPresenceUpdate('paused', jid);
-
-    const buffer = fs.readFileSync(mediaPath);
-    let sentMsg;
-    
-    if (mimeType.startsWith('image/')) {
-      sentMsg = await this.socket.sendMessage(jid, { image: buffer, caption });
-    } else if (mimeType.startsWith('video/')) {
-      sentMsg = await this.socket.sendMessage(jid, { video: buffer, caption });
-    } else if (mimeType.startsWith('audio/')) {
-      sentMsg = await this.socket.sendMessage(jid, { audio: buffer, mimetype: mimeType });
-    } else {
-      sentMsg = await this.socket.sendMessage(jid, { document: buffer, mimetype: mimeType, fileName: originalName, caption });
+    const media = MessageMedia.fromFilePath(mediaPath);
+    // Explicitly set original name to force document mode for non-media types
+    if (originalName) {
+      media.filename = originalName;
     }
 
+    const sentMsg = await this.client.sendMessage(jid, media, { caption });
     logger.info(`[whatsapp]: Media sent successfully to ${jid}`);
-    return sentMsg?.key?.id || '';
+    return sentMsg.id.id || '';
   }
 
-  /**
-   * Manually logs out from the current Baileys session and cleans up disk files.
-   * Emits 'wa:close' to notify clients that the session was ended by the user.
-   */
   public async logout(): Promise<void> {
     logger.info(`[whatsapp-${this.instanceId}]: Manual logout requested by user.`);
     this.isManualOperation = true;
     try {
-      if (this.socket) {
-        // Run logout with a 3-second timeout to prevent hanging the API if Baileys is stuck
+      if (this.client) {
         await Promise.race([
-          this.socket.logout('Manual logout requested via API').catch(() => {}),
+          this.client.logout().catch(() => {}),
           new Promise(resolve => setTimeout(resolve, 3000))
         ]);
       }
-      this._closeSocket();
+      this._closeClient();
       this._updateStatus(WaConnectionState.CLOSE);
-      this._deleteSessionDir();
       this.emit('wa:close');
     } catch (err) {
       logger.error(`[whatsapp-${this.instanceId}]: Error during logout: ${err}`);
-      this._deleteSessionDir();
     } finally {
       this.isManualOperation = false;
     }
   }
 
-  /**
-   * Pauses the current Baileys session without deleting the credentials from disk.
-   * Emits 'wa:close' to notify clients that the session was ended temporarily.
-   * Can be reconnected later automatically without scanning a QR code.
-   */
   public async disconnect(): Promise<void> {
     logger.info(`[whatsapp-${this.instanceId}]: Manual disconnect (pause) requested by user.`);
     this.isManualOperation = true;
     try {
-      this._closeSocket();
+      this._closeClient();
       this._updateStatus(WaConnectionState.CLOSE);
       this.emit('wa:close');
     } catch (err) {
@@ -336,16 +228,17 @@ export class WhatsAppService extends EventEmitter {
     }
   }
 
-  /**
-   * Restarts the current session and clears files to force a new QR generation.
-   */
   public async restart(): Promise<void> {
     logger.info(`[whatsapp-${this.instanceId}]: Manual restart requested by user.`);
     this.isManualOperation = true;
     try {
-      this._closeSocket();
+      if (this.client) {
+        try {
+          await this.client.destroy();
+        } catch(e) {}
+      }
+      this._closeClient();
       this._updateStatus(WaConnectionState.CLOSE);
-      this._deleteSessionDir();
       await this.initialize();
     } catch (err) {
       logger.error(`[whatsapp-${this.instanceId}]: Error during restart: ${err}`);
@@ -354,174 +247,79 @@ export class WhatsAppService extends EventEmitter {
     }
   }
 
-  // ─── Private Helpers ──────────────────────────────────────────────────────
+  private _registerEventListeners(): void {
+    if (!this.client) return;
 
-  /**
-   * Registers all Baileys event listeners on the active socket instance.
-   *
-   * @param saveCreds - Persistence callback from `useMultiFileAuthState`.
-   */
-  private _registerEventListeners(saveCreds: () => Promise<void>): void {
-    if (!this.socket) return;
+    this.client.on('qr', async (qr: string) => {
+      this._clearQrTimeout();
+      logger.info(`[whatsapp-${this.instanceId}]: New QR Code generated. Waiting for scan...`);
 
-    // Persist credentials on every update
-    this.socket.ev.on('creds.update', async () => {
-      await saveCreds();
-      logger.info('[whatsapp]: Credentials saved to disk.');
+      let qrBase64: string;
+      try {
+        qrBase64 = await QRCode.toDataURL(qr);
+      } catch {
+        logger.warn(`[whatsapp-${this.instanceId}]: QR encoding failed.`);
+        qrBase64 = '';
+      }
+
+      this._updateStatus(WaConnectionState.CONNECTING, qrBase64);
+      this.emit('wa:qr', qrBase64);
+
+      this.qrTimeoutRef = setTimeout(() => {
+        logger.warn(`[whatsapp-${this.instanceId}]: QR Code expired. Restarting connection...`);
+        this.emit('wa:qr:timeout');
+        this.restart().catch(() => {});
+      }, QR_TIMEOUT_MS);
     });
 
-    // Handle all connection state transitions
-    this.socket.ev.on('connection.update', async (update: Partial<ConnectionState>) => {
-      const { connection, lastDisconnect, qr } = update;
+    this.client.on('ready', () => {
+      this._clearQrTimeout();
+      logger.info(`[whatsapp-${this.instanceId}]: Connection established!`);
+      this._updateStatus(WaConnectionState.OPEN);
+      this.emit('wa:open');
+    });
 
-      // ── New QR Code — encode + emit + start expiry timer ───────────────
-      if (qr) {
-        this._clearQrTimeout();
-        logger.info('[whatsapp]: New QR Code generated. Waiting for scan...');
+    this.client.on('disconnected', (reason: any) => {
+      this._clearQrTimeout();
+      logger.warn(`[whatsapp-${this.instanceId}]: Client disconnected. Reason: ${reason}`);
+      this._updateStatus(WaConnectionState.CLOSE);
+      this.emit('wa:close');
 
-        let qrBase64: string;
-        try {
-          qrBase64 = await QRCode.toDataURL(qr);
-        } catch {
-          logger.warn('[whatsapp]: QR encoding failed.');
-          qrBase64 = '';
+      if (!this.isManualOperation) {
+        if (this.reconnectTimeoutRef) {
+          clearTimeout(this.reconnectTimeoutRef);
         }
-
-        this._updateStatus(WaConnectionState.CONNECTING, qrBase64);
-        this.emit('wa:qr', qrBase64);
-
-        // If not scanned within timeout, trigger a fresh cycle
-        this.qrTimeoutRef = setTimeout(() => {
-          logger.warn('[whatsapp]: QR Code expired. Restarting connection...');
-          this.emit('wa:qr:timeout');
-          this._closeSocket();
+        this.reconnectTimeoutRef = setTimeout(() => {
+          this.reconnectTimeoutRef = null;
           this.initialize().catch(() => {});
-        }, QR_TIMEOUT_MS);
-      }
-
-      // ── Connecting ──────────────────────────────────────────────────────
-      if (connection === 'connecting') {
-        logger.info('[whatsapp]: Connecting to WhatsApp...');
-        this._updateStatus(WaConnectionState.CONNECTING);
-      }
-
-      // ── Open (authenticated) ────────────────────────────────────────────
-      if (connection === 'open') {
-        this._clearQrTimeout();
-        logger.info('[whatsapp]: Connection established!');
-        this._updateStatus(WaConnectionState.OPEN);
-        this.emit('wa:open');
-      }
-
-      // ── Closed ─────────────────────────────────────────────────────────
-      if (connection === 'close') {
-        this._clearQrTimeout();
-        const reason = (lastDisconnect?.error as Boom)?.output?.statusCode;
-        
-        const isLoggedOut = reason === DisconnectReason.loggedOut;
-        const isBanned    = reason === 403; // 403 Forbidden is typically returned for banned/blocked numbers
-        const shouldReconnect = !isLoggedOut && !isBanned;
-
-        this._updateStatus(WaConnectionState.CLOSE);
-
-        if (isBanned) {
-          logger.error(`[whatsapp-${this.instanceId}]: 🚨 CRITICAL ALERT: WhatsApp account has been BANNED or FORBIDDEN (Code: 403).`);
-          this.emit('wa:close', reason);
-          this._deleteSessionDir();
-        } else if (isLoggedOut) {
-          logger.warn(`[whatsapp-${this.instanceId}]: Logged out from device. Clearing session files...`);
-          this.emit('wa:close', reason);
-          this._deleteSessionDir();
-        } else {
-          logger.warn(`[whatsapp-${this.instanceId}]: Connection closed. Reason code: ${reason}. ${this.isManualOperation ? 'Manual operation in progress, skipping auto-reconnect.' : 'Reconnecting in 5s...'}`);
-          this.emit('wa:close', reason);
-
-          // Don't auto-reconnect if this was triggered by a manual restart/logout
-          if (!this.isManualOperation) {
-            if (this.reconnectTimeoutRef) {
-              clearTimeout(this.reconnectTimeoutRef);
-            }
-            this.reconnectTimeoutRef = setTimeout(() => {
-              this.reconnectTimeoutRef = null;
-              this.initialize().catch(() => {});
-            }, 5_000);
-          }
-        }
+        }, 5_000);
       }
     });
 
-    // Handle message receipts (delivered / read)
-    this.socket.ev.on('messages.update', async (updates) => {
-      for (const update of updates) {
-        if (update.update.status) {
-          const messageId = update.key.id;
-          const statusInt = update.update.status;
-          
-          let strStatus: 'delivered' | 'read' | null = null;
-          // Baileys status codes: 3 = SERVER_ACK/DELIVERY_ACK, 4 = READ
-          if (statusInt === 3) strStatus = 'delivered';
-          if (statusInt === 4) strStatus = 'read';
-
-          if (messageId && strStatus) {
-            this.emit('message:status', { messageId, status: strStatus });
-          }
-        }
+    this.client.on('message_ack', (msg: any, ack: number) => {
+      // ack: 1=Send, 2=Delivered, 3=Read
+      const messageId = msg.id.id;
+      if (ack === 2) {
+        this.emit('message:status', { messageId, status: 'delivered' });
+      } else if (ack === 3) {
+        this.emit('message:status', { messageId, status: 'read' });
       }
     });
 
-    // Handle new incoming messages (for real-time chat)
-    this.socket.ev.on('messages.upsert', async (m) => {
-    if (m.type !== 'notify') return; // Only process new messages
+    this.client.on('message', async (msg: any) => {
+      const fromNumber = msg.from.split('@')[0];
+      const messageId = msg.id.id;
+      const timestamp = msg.timestamp * 1000;
+      let text = msg.body || '';
       
-      for (const msg of m.messages) {
-        if (msg.key.fromMe || !msg.message || !msg.key.remoteJid) continue;
-        
-        // Pass status broadcasts to Warmup module instead of just ignoring them completely
-        if (msg.key.remoteJid === 'status@broadcast') {
-          await WarmupStatusViewerService.handleIncomingStatus(this.instanceId.toString(), msg, this.socket!);
-          continue; 
-        }
+      let mediaUrl;
+      let mediaType;
 
-        // --- WARMUP INTERCEPTION: Individual DMs ---
-        if (!msg.key.fromMe && !msg.key.remoteJid?.endsWith('@g.us')) {
-          await WarmupIndividualReaderService.handleIncomingMessage(this.instanceId.toString(), msg, this.socket!);
-        }
-        
-        const remoteJid = msg.key.remoteJid;
-        const fromNumber = remoteJid.split('@')[0]; // Simple normalization to phone number
-        
-        // Pass group messages to Warmup module for passive viewing, but DO NOT stop processing
-        if (remoteJid.endsWith('@g.us')) {
-          await WarmupGroupReaderService.handleIncomingGroupMessage(this.instanceId.toString(), msg, this.socket!);
-          // Notice: We don't 'continue;' here because actual CRM features might need the group message.
-        }
-
-        const messageId = msg.key.id || '';
-        let timestamp = Date.now();
-        if (typeof msg.messageTimestamp === 'number') {
-          timestamp = msg.messageTimestamp * 1000;
-        } else if (typeof msg.messageTimestamp === 'string') {
-          timestamp = parseInt(msg.messageTimestamp, 10) * 1000;
-        }
-
-        // Extract text (conversation for normal texts, extendedTextMessage for replies/links)
-        let text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-        
-        let mediaUrl;
-        let mediaType;
-
-        const msgType = Object.keys(msg.message || {})[0];
-        
-        if (['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage'].includes(msgType)) {
-          try {
-            const buffer = await downloadMediaMessage(msg, 'buffer', { }, { 
-              logger: this.socket!.logger as any,
-              reuploadRequest: this.socket!.updateMediaMessage
-            });
-            
-            const messageObj: any = msg.message[msgType as keyof typeof msg.message];
-            mediaType = messageObj?.mimetype || 'application/octet-stream';
-            
+      if (msg.hasMedia) {
+        try {
+          const media = await msg.downloadMedia();
+          if (media) {
+            mediaType = media.mimetype;
             const ext = mediaType.split('/')[1]?.split(';')[0] || 'bin';
             const fileName = `${Date.now()}-${messageId}.${ext}`;
             const uploadPath = path.resolve(process.cwd(), 'uploads', fileName);
@@ -529,37 +327,28 @@ export class WhatsAppService extends EventEmitter {
             if (!fs.existsSync(path.resolve(process.cwd(), 'uploads'))) {
               fs.mkdirSync(path.resolve(process.cwd(), 'uploads'), { recursive: true });
             }
-            fs.writeFileSync(uploadPath, buffer);
+            fs.writeFileSync(uploadPath, Buffer.from(media.data, 'base64'));
             
             mediaUrl = `/uploads/${fileName}`;
-            if (!text && messageObj?.caption) {
-              text = messageObj.caption;
-            }
-          } catch (err) {
-            logger.error(`[whatsapp-${this.instanceId}]: Failed to download incoming media: ${err}`);
           }
-        }
-
-        if (text || mediaUrl) {
-          logger.info(`[whatsapp-${this.instanceId}]: Received message from ${fromNumber}`);
-          this.emit('wa:message', {
-            instanceId: this.instanceId,
-            messageId,
-            fromNumber,
-            text,
-            timestamp,
-            mediaUrl,
-            mediaType
-          });
+        } catch (err) {
+          logger.error(`[whatsapp-${this.instanceId}]: Failed to download incoming media: ${err}`);
         }
       }
+
+      logger.info(`[whatsapp-${this.instanceId}]: Received message from ${fromNumber}`);
+      this.emit('wa:message', {
+        instanceId: this.instanceId,
+        messageId,
+        fromNumber,
+        text,
+        timestamp,
+        mediaUrl,
+        mediaType
+      });
     });
   }
 
-  /**
-   * Updates the internal status snapshot.
-   * Clears `qrCode` once the state is OPEN to free memory.
-   */
   private _updateStatus(state: WaConnectionState, qrCode?: string): void {
     this.status = {
       state,
@@ -568,7 +357,6 @@ export class WhatsAppService extends EventEmitter {
     };
   }
 
-  /** Cancels any pending QR expiry timer. */
   private _clearQrTimeout(): void {
     if (this.qrTimeoutRef) {
       clearTimeout(this.qrTimeoutRef);
@@ -576,7 +364,6 @@ export class WhatsAppService extends EventEmitter {
     }
   }
 
-  /** Destroys the active socket, triggering a 'close' event. */
   public getHealthScore(): number {
     return this.healthScore;
   }
@@ -598,43 +385,16 @@ export class WhatsAppService extends EventEmitter {
     await this.setHealthScore(this.healthScore - points);
   }
 
-  private _closeSocket(): void {
+  private _closeClient(): void {
     if (this.reconnectTimeoutRef) {
       clearTimeout(this.reconnectTimeoutRef);
       this.reconnectTimeoutRef = null;
     }
-    if (this.socket) {
-      this.socket.end(undefined);
-      this.socket = null;
-    }
-  }
-
-  /** Removes all session files, forcing a fresh QR scan on next initialize(). */
-  private _deleteSessionDir(): void {
-    if (fs.existsSync(this.sessionDir)) {
+    if (this.client) {
       try {
-        fs.rmSync(this.sessionDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
-        logger.info(`[whatsapp-${this.instanceId}]: Session directory cleared.`);
-      } catch (err) {
-        logger.error(`[whatsapp-${this.instanceId}]: Failed to clear session directory, trying to delete files individually: ${err}`);
-        try {
-          const files = fs.readdirSync(this.sessionDir);
-          for (const file of files) {
-            try {
-              const filePath = path.join(this.sessionDir, file);
-              if (fs.lstatSync(filePath).isDirectory()) {
-                fs.rmSync(filePath, { recursive: true, force: true });
-              } else {
-                fs.unlinkSync(filePath);
-              }
-            } catch (fileErr) {
-              logger.warn(`[whatsapp-${this.instanceId}]: Could not delete file ${file}: ${fileErr}`);
-            }
-          }
-        } catch (dirErr) {
-          logger.error(`[whatsapp-${this.instanceId}]: Error reading session directory: ${dirErr}`);
-        }
-      }
+        this.client.destroy();
+      } catch (e) {}
+      this.client = null;
     }
   }
 }
